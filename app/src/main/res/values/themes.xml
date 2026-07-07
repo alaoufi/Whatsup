@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      سمة أساسية للتطبيق تُستخدم قبل تحميل Compose (خاصة شاشة البدء).
+      نستخدم سمة Material3 بلا شريط عنوان (NoActionBar) لأن الواجهة بالكامل عبر Compose.
+    -->
+    <style name="Theme.WhatsAppReminder" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@color/whatsapp_green</item>
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>

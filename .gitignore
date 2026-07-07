@@ -1,0 +1,18 @@
+# ملفات يجب تجاهلها في Git
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# مخرجات البناء
+app/build/
+build/
+
+# ملفات Kotlin
+*.hprof

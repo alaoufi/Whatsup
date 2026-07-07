@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">تذكيرات واتساب</string>
+
+    <!-- نصوص الإشعارات -->
+    <string name="notification_title">تذكير بإرسال رسالة</string>
+    <string name="notification_text">حان وقت إرسال رسالة إلى %1$s</string>
+    <string name="notification_expired_title">فات موعد التذكير</string>
+    <string name="notification_expired_text">لم يتم إرسال رسالتك إلى %1$s في موعدها</string>
+
+    <!-- رسائل الأخطاء -->
+    <string name="error_whatsapp_not_found">تعذّر فتح واتساب. تأكد من تثبيته على جهازك.</string>
+</resources>

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- الصلاحيات المطلوبة -->
+    <!-- إرسال الإشعارات (مطلوبة على Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- إعادة الجدولة بعد إعادة تشغيل الجهاز -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- جدولة المنبهات الدقيقة -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- الوصول للإنترنت والتحقق من حالة الشبكة -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- للتحقق من تثبيت واتساب عند الحاجة (اختياري) -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".WhatsAppReminderApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.WhatsAppReminder"
+        tools:targetApi="34">
+
+        <!-- الشاشة الرئيسية (نقطة الإطلاق) -->
+        <activity
+            android:name=".ui.main.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.WhatsAppReminder">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- شاشة إضافة تذكير -->
+        <activity
+            android:name=".ui.add.AddReminderActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.main.MainActivity"
+            android:theme="@style/Theme.WhatsAppReminder" />
+
+        <!-- شاشة تفاصيل التذكير (تُفتح من الإشعار أيضاً) -->
+        <activity
+            android:name=".ui.detail.ReminderDetailActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.main.MainActivity"
+            android:theme="@style/Theme.WhatsAppReminder" />
+
+        <!-- مستقبِل إعادة التشغيل لإعادة جدولة التذكيرات -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- تعطيل التهيئة الافتراضية لـ WorkManager لأننا نستخدم Hilt (Configuration.Provider) -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+    </application>
+
+</manifest>
