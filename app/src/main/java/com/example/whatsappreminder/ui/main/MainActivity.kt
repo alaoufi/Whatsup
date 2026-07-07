@@ -1,6 +1,9 @@
 package com.example.whatsappreminder.ui.main
 
+import android.app.Activity
 import android.content.Intent
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -28,6 +31,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -140,6 +144,24 @@ fun MainScreen(
         pendingExport = null
     }
 
+    // مُطلق منتقي نغمة التنبيه (منتقي النظام الرسمي)
+    val ringtonePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            @Suppress("DEPRECATION")
+            val picked: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+            } else {
+                data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            }
+            // حفظ النغمة وإعادة إنشاء القناة بها
+            NotificationHelper(context).updateSound(picked)
+            Toast.makeText(context, "تم تحديث نغمة التنبيه", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // مُطلق اختيار ملف نسخة احتياطية للاستيراد
     val openDocLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -174,7 +196,24 @@ fun MainScreen(
                 actions = {
                     OverflowMenu(
                         onExport = { viewModel.requestExport() },
-                        onImport = { openDocLauncher.launch(arrayOf("application/json", "text/*", "*/*")) }
+                        onImport = { openDocLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
+                        onPickSound = {
+                            // بناء نية منتقي النغمات الرسمي من النظام
+                            val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                                putExtra(
+                                    RingtoneManager.EXTRA_RINGTONE_TYPE,
+                                    RingtoneManager.TYPE_NOTIFICATION
+                                )
+                                putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "اختر نغمة التنبيه")
+                                putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                                putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                                putExtra(
+                                    RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                                    NotificationHelper(context).currentSoundUri()
+                                )
+                            }
+                            runCatching { ringtonePickerLauncher.launch(intent) }
+                        }
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -213,17 +252,23 @@ fun MainScreen(
     }
 }
 
-/** قائمة منسدلة (⋮) لخيارات التصدير والاستيراد */
+/** قائمة منسدلة (⋮) لخيارات التصدير والاستيراد ونغمة التنبيه */
 @Composable
 private fun OverflowMenu(
     onExport: () -> Unit,
-    onImport: () -> Unit
+    onImport: () -> Unit,
+    onPickSound: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     IconButton(onClick = { expanded = true }) {
         Icon(Icons.Filled.MoreVert, contentDescription = "خيارات")
     }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text("نغمة التنبيه") },
+            leadingIcon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
+            onClick = { expanded = false; onPickSound() }
+        )
         DropdownMenuItem(
             text = { Text("تصدير نسخة احتياطية") },
             leadingIcon = { Icon(Icons.Filled.FileDownload, contentDescription = null) },
