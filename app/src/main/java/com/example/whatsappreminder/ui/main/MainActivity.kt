@@ -3,7 +3,9 @@ package com.example.whatsappreminder.ui.main
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -23,29 +25,36 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.compose.runtime.LaunchedEffect
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.whatsappreminder.domain.model.Reminder
@@ -58,7 +67,7 @@ import com.example.whatsappreminder.util.NotificationHelper
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
- * الشاشة الرئيسية: تعرض قائمة التذكيرات وتتيح إضافة تذكير جديد.
+ * الشاشة الرئيسية: تعرض قائمة التذكيرات وتتيح إضافة/تصدير/استيراد التذكيرات.
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -112,14 +121,66 @@ fun MainScreen(
 ) {
     // مراقبة حالة الواجهة عبر StateFlow
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // نص التصدير المؤقت بانتظار اختيار المستخدم لمكان الحفظ
+    var pendingExport by remember { mutableStateOf<String?>(null) }
+
+    // مُطلق حفظ ملف النسخة الاحتياطية
+    val createDocLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        val json = pendingExport
+        if (uri != null && json != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+            }
+            Toast.makeText(context, "تم حفظ النسخة الاحتياطية", Toast.LENGTH_SHORT).show()
+        }
+        pendingExport = null
+    }
+
+    // مُطلق اختيار ملف نسخة احتياطية للاستيراد
+    val openDocLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val text = runCatching {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()
+            if (text != null) viewModel.importFromJson(text)
+        }
+    }
+
+    // استقبال الأحداث لمرة واحدة (تصدير/رسائل)
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is MainEvent.ExportReady -> {
+                    pendingExport = event.json
+                    createDocLauncher.launch("whatsapp_reminders_backup.json")
+                }
+                is MainEvent.Message -> {
+                    Toast.makeText(context, event.text, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("تذكيرات واتساب") },
+                actions = {
+                    OverflowMenu(
+                        onExport = { viewModel.requestExport() },
+                        onImport = { openDocLauncher.launch(arrayOf("application/json", "text/*", "*/*")) }
+                    )
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         },
@@ -149,6 +210,30 @@ fun MainScreen(
                 }
             }
         }
+    }
+}
+
+/** قائمة منسدلة (⋮) لخيارات التصدير والاستيراد */
+@Composable
+private fun OverflowMenu(
+    onExport: () -> Unit,
+    onImport: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    IconButton(onClick = { expanded = true }) {
+        Icon(Icons.Filled.MoreVert, contentDescription = "خيارات")
+    }
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text("تصدير نسخة احتياطية") },
+            leadingIcon = { Icon(Icons.Filled.FileDownload, contentDescription = null) },
+            onClick = { expanded = false; onExport() }
+        )
+        DropdownMenuItem(
+            text = { Text("استيراد نسخة احتياطية") },
+            leadingIcon = { Icon(Icons.Filled.FileUpload, contentDescription = null) },
+            onClick = { expanded = false; onImport() }
+        )
     }
 }
 
@@ -211,7 +296,7 @@ private fun ReminderCard(
                 }
             }
             // زر حذف سريع
-            androidx.compose.material3.IconButton(onClick = onDelete) {
+            IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Filled.Delete,
                     contentDescription = "حذف",

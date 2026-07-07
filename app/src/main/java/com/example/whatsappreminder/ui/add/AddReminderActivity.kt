@@ -2,10 +2,16 @@ package com.example.whatsappreminder.ui.add
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -70,6 +76,22 @@ fun AddReminderScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    // مُطلق اختيار جهة اتصال من دفتر الهاتف.
+    // نستخدم ACTION_PICK فيمنح النظام صلاحية قراءة مؤقتة للسجل المختار
+    // دون الحاجة لطلب صلاحية READ_CONTACTS دائمة.
+    val contactPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.data
+        if (result.resultCode == android.app.Activity.RESULT_OK && uri != null) {
+            val contact = queryPickedContact(context, uri)
+            if (contact != null) {
+                viewModel.onContactNameChange(contact.first)
+                viewModel.onPhoneChange(contact.second)
+            }
+        }
+    }
+
     // عند الحفظ الناجح، أغلق الشاشة
     LaunchedEffect(state.isSaved) {
         if (state.isSaved) {
@@ -126,6 +148,17 @@ fun AddReminderScreen(
                 isError = state.phoneError != null,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                // زر اختيار جهة اتصال من دفتر الهاتف
+                trailingIcon = {
+                    IconButton(onClick = {
+                        val intent = Intent(Intent.ACTION_PICK).apply {
+                            type = ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE
+                        }
+                        runCatching { contactPickerLauncher.launch(intent) }
+                    }) {
+                        Icon(Icons.Filled.Contacts, contentDescription = "اختيار من جهات الاتصال")
+                    }
+                },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -189,6 +222,27 @@ fun AddReminderScreen(
             }
         }
     }
+}
+
+/**
+ * قراءة اسم ورقم جهة الاتصال المختارة من الـ Uri الناتج عن ACTION_PICK.
+ * @return زوج (الاسم، الرقم) أو null إذا تعذّرت القراءة.
+ */
+private fun queryPickedContact(context: Context, uri: android.net.Uri): Pair<String, String>? {
+    val projection = arrayOf(
+        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+        ContactsContract.CommonDataKinds.Phone.NUMBER
+    )
+    return runCatching {
+        context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val name = cursor.getString(0) ?: ""
+                // إزالة المسافات من الرقم مع الإبقاء على رمز الدولة (+)
+                val number = (cursor.getString(1) ?: "").replace(" ", "").replace("-", "")
+                Pair(name, number)
+            } else null
+        }
+    }.getOrNull()
 }
 
 /**
