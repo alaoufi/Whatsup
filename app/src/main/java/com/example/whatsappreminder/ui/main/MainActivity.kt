@@ -305,7 +305,8 @@ private fun ReminderCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = reminder.contactName,
+                    // العنوان: الاسم إن وُجد، وإلا الرقم
+                    text = reminder.contactName.ifBlank { reminder.phoneNumber },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )

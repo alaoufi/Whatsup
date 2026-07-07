@@ -6,8 +6,8 @@ import com.example.whatsappreminder.data.local.database.AppDatabase
 import com.example.whatsappreminder.data.local.database.ReminderDao
 import com.example.whatsappreminder.data.local.repository.ReminderRepositoryImpl
 import com.example.whatsappreminder.domain.repository.ReminderRepository
+import com.example.whatsappreminder.util.AlarmReminderScheduler
 import com.example.whatsappreminder.util.ReminderScheduler
-import com.example.whatsappreminder.util.WorkManagerReminderScheduler
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -44,9 +44,9 @@ object AppModule {
     fun provideReminderRepository(dao: ReminderDao): ReminderRepository =
         ReminderRepositoryImpl(dao)
 
-    /** ربط واجهة الجدولة بتنفيذها المعتمد على WorkManager */
+    /** ربط واجهة الجدولة بتنفيذها المعتمد على المنبّه الدقيق (AlarmManager) */
     @Provides
     @Singleton
-    fun provideReminderScheduler(impl: WorkManagerReminderScheduler): ReminderScheduler =
+    fun provideReminderScheduler(impl: AlarmReminderScheduler): ReminderScheduler =
         impl
 }

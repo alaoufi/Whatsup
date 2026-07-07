@@ -64,10 +64,7 @@ class AddReminderViewModel @Inject constructor(
         val state = _uiState.value
         var valid = true
 
-        // اسم جهة الاتصال مطلوب
-        val nameError = if (state.contactName.isBlank()) {
-            valid = false; "أدخل اسم جهة الاتصال"
-        } else null
+        // ملاحظة: الاسم لم يعد مطلوباً — يُلتقط تلقائياً من جهات الاتصال إن وُجد.
 
         // رقم الهاتف: أرقام فقط بطول معقول (يُسمح بـ + في البداية)
         val digits = state.phoneNumber.filter { it.isDigit() }
@@ -93,7 +90,6 @@ class AddReminderViewModel @Inject constructor(
 
         _uiState.update {
             it.copy(
-                contactNameError = nameError,
                 phoneError = phoneError,
                 messageError = messageError,
                 timeError = timeError

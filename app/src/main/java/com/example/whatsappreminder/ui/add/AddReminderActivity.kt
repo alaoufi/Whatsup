@@ -1,17 +1,16 @@
 package com.example.whatsappreminder.ui.add
 
+import android.Manifest
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import android.content.Context
-import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
-import android.provider.ContactsContract
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.filled.Contacts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -25,7 +24,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,20 +41,27 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.whatsappreminder.ui.theme.WhatsAppReminderTheme
+import com.example.whatsappreminder.util.ContactResult
+import com.example.whatsappreminder.util.ContactsSearch
 import com.example.whatsappreminder.util.DateFormatter
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.Calendar
 
 /**
  * شاشة إضافة تذكير جديد.
+ * لا يوجد حقل اسم — الرقم يُختار عبر البحث في جهات الاتصال.
  */
 @AndroidEntryPoint
 class AddReminderActivity : ComponentActivity() {
@@ -76,19 +85,37 @@ fun AddReminderScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    // مُطلق اختيار جهة اتصال من دفتر الهاتف.
-    // نستخدم ACTION_PICK فيمنح النظام صلاحية قراءة مؤقتة للسجل المختار
-    // دون الحاجة لطلب صلاحية READ_CONTACTS دائمة.
-    val contactPickerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val uri = result.data?.data
-        if (result.resultCode == android.app.Activity.RESULT_OK && uri != null) {
-            val contact = queryPickedContact(context, uri)
-            if (contact != null) {
-                viewModel.onContactNameChange(contact.first)
-                viewModel.onPhoneChange(contact.second)
-            }
+    // حالة صلاحية قراءة جهات الاتصال
+    var hasContactsPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.READ_CONTACTS
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasContactsPermission = granted
+        if (!granted) {
+            Toast.makeText(
+                context,
+                "امنح صلاحية جهات الاتصال أو اكتب الرقم يدوياً",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    // حقل البحث ونتائجه
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<ContactResult>>(emptyList()) }
+
+    // تحديث النتائج عند تغيّر نص البحث أو منح الصلاحية
+    LaunchedEffect(query, hasContactsPermission) {
+        results = if (hasContactsPermission && query.isNotBlank()) {
+            ContactsSearch.search(context, query)
+        } else {
+            emptyList()
         }
     }
 
@@ -125,40 +152,74 @@ fun AddReminderScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // اسم جهة الاتصال
+            // حقل البحث في جهات الاتصال (اسم أو رقم)
             OutlinedTextField(
-                value = state.contactName,
-                onValueChange = viewModel::onContactNameChange,
-                label = { Text("اسم جهة الاتصال") },
+                value = query,
+                onValueChange = { q ->
+                    query = q
+                    // طلب الصلاحية عند أول استخدام إن لم تُمنح بعد
+                    if (q.isNotBlank() && !hasContactsPermission) {
+                        permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                    }
+                },
+                label = { Text("ابحث عن جهة اتصال (اسم أو رقم)") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true,
-                isError = state.contactNameError != null,
-                supportingText = { state.contactNameError?.let { Text(it) } },
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // رقم الهاتف مع تلميح الصيغة الدولية
+            // نتائج البحث — اضغط لاختيار الرقم
+            if (results.isNotEmpty()) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        results.forEachIndexed { index, contact ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        // ملء الرقم والاسم (الاسم يُحفظ للعرض فقط)
+                                        viewModel.onContactNameChange(contact.name)
+                                        viewModel.onPhoneChange(contact.number)
+                                        query = ""
+                                        results = emptyList()
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = contact.name.ifBlank { contact.number },
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                if (contact.name.isNotBlank()) {
+                                    Text(
+                                        text = contact.number,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            if (index < results.lastIndex) Divider()
+                        }
+                    }
+                }
+            }
+
+            // رقم الهاتف (يُملأ من البحث أو يُكتب يدوياً)
             OutlinedTextField(
                 value = state.phoneNumber,
                 onValueChange = viewModel::onPhoneChange,
-                label = { Text("رقم الهاتف") },
+                label = { Text("الرقم") },
                 placeholder = { Text("مثال: +9665xxxxxxxx") },
                 supportingText = {
-                    Text(state.phoneError ?: "أدخل الرقم مع رمز الدولة")
+                    Text(
+                        state.phoneError
+                            ?: if (state.contactName.isNotBlank())
+                                "جهة الاتصال: ${state.contactName}"
+                            else "اختر من البحث بالأعلى أو اكتب الرقم مع رمز الدولة"
+                    )
                 },
                 isError = state.phoneError != null,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                // زر اختيار جهة اتصال من دفتر الهاتف
-                trailingIcon = {
-                    IconButton(onClick = {
-                        val intent = Intent(Intent.ACTION_PICK).apply {
-                            type = ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE
-                        }
-                        runCatching { contactPickerLauncher.launch(intent) }
-                    }) {
-                        Icon(Icons.Filled.Contacts, contentDescription = "اختيار من جهات الاتصال")
-                    }
-                },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -193,7 +254,6 @@ fun AddReminderScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Filled.Event, contentDescription = null)
-                Spacer(Modifier.height(0.dp))
                 Text(
                     text = state.scheduledTime?.let { DateFormatter.formatFull(it) }
                         ?: "  اختر التاريخ والوقت",
@@ -215,34 +275,12 @@ fun AddReminderScreen(
                 onClick = { viewModel.save() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                enabled = true
+                    .height(52.dp)
             ) {
                 Text("حفظ التذكير", style = MaterialTheme.typography.titleMedium)
             }
         }
     }
-}
-
-/**
- * قراءة اسم ورقم جهة الاتصال المختارة من الـ Uri الناتج عن ACTION_PICK.
- * @return زوج (الاسم، الرقم) أو null إذا تعذّرت القراءة.
- */
-private fun queryPickedContact(context: Context, uri: android.net.Uri): Pair<String, String>? {
-    val projection = arrayOf(
-        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-        ContactsContract.CommonDataKinds.Phone.NUMBER
-    )
-    return runCatching {
-        context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val name = cursor.getString(0) ?: ""
-                // إزالة المسافات من الرقم مع الإبقاء على رمز الدولة (+)
-                val number = (cursor.getString(1) ?: "").replace(" ", "").replace("-", "")
-                Pair(name, number)
-            } else null
-        }
-    }.getOrNull()
 }
 
 /**

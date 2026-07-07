@@ -14,6 +14,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- قراءة جهات الاتصال للبحث عن الأرقام واختيارها -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
     <!-- للتحقق من تثبيت واتساب عند الحاجة (اختياري) -->
     <queries>
         <package android:name="com.whatsapp" />
@@ -77,6 +80,12 @@
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- مستقبِل المنبّه الدقيق الذي يُطلق إشعار التذكير في وقته -->
+        <receiver
+            android:name=".receiver.ReminderAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
 
         <!-- تعطيل التهيئة الافتراضية لـ WorkManager لأننا نستخدم Hilt (Configuration.Provider) -->
         <provider

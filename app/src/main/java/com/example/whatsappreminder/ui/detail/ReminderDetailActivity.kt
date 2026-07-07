@@ -200,8 +200,10 @@ private fun DetailContent(
             }
         }
 
-        // الحقول التفصيلية
-        DetailField(label = "اسم جهة الاتصال", value = reminder.contactName)
+        // الحقول التفصيلية (الاسم يظهر فقط إن وُجد)
+        if (reminder.contactName.isNotBlank()) {
+            DetailField(label = "اسم جهة الاتصال", value = reminder.contactName)
+        }
         DetailField(label = "رقم الهاتف", value = reminder.phoneNumber)
         DetailField(label = "الرسالة", value = reminder.message)
         DetailField(
