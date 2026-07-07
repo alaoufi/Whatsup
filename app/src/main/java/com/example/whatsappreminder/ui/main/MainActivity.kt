@@ -153,6 +153,7 @@ fun MainScreen(
 }
 
 /** بطاقة عرض تذكير واحد في القائمة */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReminderCard(
     reminder: Reminder,

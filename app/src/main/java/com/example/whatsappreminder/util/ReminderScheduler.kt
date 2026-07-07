@@ -7,6 +7,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.WorkRequest
 import com.example.whatsappreminder.data.worker.ReminderWorker
 import com.example.whatsappreminder.domain.model.Reminder
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -58,7 +59,7 @@ class ReminderScheduler @Inject constructor(
             // سياسة إعادة المحاولة الأسّية عند إرجاع retry
             .setBackoffCriteria(
                 BackoffPolicy.LINEAR,
-                WorkManager.MIN_BACKOFF_MILLIS,
+                WorkRequest.MIN_BACKOFF_MILLIS,
                 TimeUnit.MILLISECONDS
             )
             .addTag(WORK_NAME_PREFIX + reminder.id)

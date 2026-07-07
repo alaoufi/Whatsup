@@ -25,11 +25,16 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // تفعيل تصغير الكود (R8) وإزالة الموارد غير المستخدمة لتقليل حجم APK
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // توقيع نسخة release بمفتاح debug لتسهيل التثبيت المباشر (Sideload)
+            // ملاحظة: للنشر على Google Play استبدله بمفتاح إصدار خاص بك.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

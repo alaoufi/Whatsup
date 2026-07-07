@@ -16,3 +16,6 @@ build/
 
 # ملفات Kotlin
 *.hprof
+
+# ملفات APK المبنية
+*.apk
