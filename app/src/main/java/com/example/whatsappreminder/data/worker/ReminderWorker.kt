@@ -71,6 +71,7 @@ class ReminderWorker @AssistedInject constructor(
         notificationHelper.showReminderNotification(
             reminderId = reminderId,
             contactName = reminder.contactName,
+            phoneNumber = reminder.phoneNumber,
             message = reminder.message
         )
         repository.updateStatus(reminderId, ReminderStatus.NOTIFIED, notifiedAt = now)

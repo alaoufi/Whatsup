@@ -52,12 +52,20 @@
             android:parentActivityName=".ui.main.MainActivity"
             android:theme="@style/Theme.WhatsAppReminder" />
 
-        <!-- شاشة تفاصيل التذكير (تُفتح من الإشعار أيضاً) -->
+        <!-- شاشة تفاصيل التذكير (تُفتح من القائمة ومن إشعار "فات الموعد") -->
         <activity
             android:name=".ui.detail.ReminderDetailActivity"
             android:exported="false"
             android:parentActivityName=".ui.main.MainActivity"
             android:theme="@style/Theme.WhatsAppReminder" />
+
+        <!-- شاشة وسيطة شفافة تفتح واتساب مباشرة عند الضغط على إشعار التذكير -->
+        <activity
+            android:name=".ui.open.OpenWhatsAppActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <!-- مستقبِل إعادة التشغيل لإعادة جدولة التذكيرات -->
         <receiver

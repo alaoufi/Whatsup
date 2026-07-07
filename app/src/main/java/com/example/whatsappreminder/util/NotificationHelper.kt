@@ -11,6 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.example.whatsappreminder.R
 import com.example.whatsappreminder.ui.detail.ReminderDetailActivity
+import com.example.whatsappreminder.ui.open.OpenWhatsAppActivity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
@@ -25,6 +26,8 @@ class NotificationHelper @Inject constructor(
         const val CHANNEL_ID = "reminder_channel"
         const val CHANNEL_NAME = "تذكيرات واتساب"
         const val EXTRA_REMINDER_ID = "extra_reminder_id"
+        const val EXTRA_PHONE = "extra_phone"
+        const val EXTRA_MESSAGE = "extra_message"
     }
 
     /**
@@ -48,16 +51,25 @@ class NotificationHelper @Inject constructor(
 
     /**
      * عرض إشعار التذكير في موعده.
+     * الضغط على الإشعار يفتح واتساب مباشرة (عبر شاشة وسيطة شفافة) بالرسالة الجاهزة.
      *
-     * @param reminderId معرّف التذكير (يُمرَّر إلى شاشة التفاصيل)
-     * @param contactName اسم جهة الاتصال
-     * @param message نص الرسالة (يُعرض كاملاً عبر BigTextStyle)
+     * @param reminderId معرّف التذكير
+     * @param contactName اسم جهة الاتصال (يُعرض في نص الإشعار)
+     * @param phoneNumber رقم الهاتف (لفتح محادثة واتساب الصحيحة)
+     * @param message نص الرسالة (يُعرض كاملاً عبر BigTextStyle ويُمرَّر لواتساب)
      */
-    fun showReminderNotification(reminderId: Long, contactName: String, message: String) {
-        // نية تفتح شاشة التفاصيل عند الضغط على الإشعار
-        val intent = Intent(context, ReminderDetailActivity::class.java).apply {
+    fun showReminderNotification(
+        reminderId: Long,
+        contactName: String,
+        phoneNumber: String,
+        message: String
+    ) {
+        // نية تفتح واتساب مباشرة عبر الشاشة الوسيطة الشفافة عند الضغط على الإشعار
+        val intent = Intent(context, OpenWhatsAppActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_REMINDER_ID, reminderId)
+            putExtra(EXTRA_PHONE, phoneNumber)
+            putExtra(EXTRA_MESSAGE, message)
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
