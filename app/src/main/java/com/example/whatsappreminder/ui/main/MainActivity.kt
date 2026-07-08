@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,18 +26,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -44,6 +49,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -51,6 +57,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -99,6 +106,8 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // عرض شاشة البداية الرسمية قبل تحميل الواجهة
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         setContent {
@@ -119,7 +128,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(
     onAddClick: () -> Unit,
@@ -138,8 +147,9 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     // التذكير المُنتظر تأكيد حذفه
     var pendingDelete by remember { mutableStateOf<Reminder?>(null) }
-    // إظهار حوار رمز الدولة
+    // إظهار حوار رمز الدولة / حول التطبيق
     var showCountryDialog by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
 
     // شاشة الترحيب/الأذونات عند أول تشغيل
     val settingsPrefs = remember { SettingsPreferences(context) }
@@ -232,6 +242,7 @@ fun MainScreen(
                             }
                         },
                         onCountryCode = { showCountryDialog = true },
+                        onAbout = { showAbout = true },
                         onExport = { viewModel.requestExport() },
                         onImport = { openDocLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
                         onPickSound = {
@@ -278,6 +289,17 @@ fun MainScreen(
             if (uiState.reminders.isEmpty() && !uiState.isLoading) {
                 EmptyState(modifier = Modifier.weight(1f))
             } else {
+                // تجميع: قادمة (نشطة) ومنتهية
+                val active = uiState.reminders.filter {
+                    it.status == ReminderStatus.SCHEDULED ||
+                        it.status == ReminderStatus.PENDING_NETWORK ||
+                        it.status == ReminderStatus.NOTIFIED
+                }
+                val done = uiState.reminders.filter {
+                    it.status == ReminderStatus.OPENED ||
+                        it.status == ReminderStatus.CANCELLED ||
+                        it.status == ReminderStatus.EXPIRED
+                }
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
@@ -285,12 +307,27 @@ fun MainScreen(
                     contentPadding = PaddingValues(12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(uiState.reminders, key = { it.id }) { reminder ->
-                        ReminderCard(
-                            reminder = reminder,
-                            onClick = { onItemClick(reminder) },
-                            onDelete = { pendingDelete = reminder }
-                        )
+                    if (active.isNotEmpty()) {
+                        item(key = "h_active") { SectionHeader("قادمة (${active.size})") }
+                        items(active, key = { it.id }) { reminder ->
+                            ReminderCard(
+                                reminder = reminder,
+                                modifier = Modifier.animateItemPlacement(),
+                                onClick = { onItemClick(reminder) },
+                                onDelete = { pendingDelete = reminder }
+                            )
+                        }
+                    }
+                    if (done.isNotEmpty()) {
+                        item(key = "h_done") { SectionHeader("منتهية (${done.size})") }
+                        items(done, key = { it.id }) { reminder ->
+                            ReminderCard(
+                                reminder = reminder,
+                                modifier = Modifier.animateItemPlacement(),
+                                onClick = { onItemClick(reminder) },
+                                onDelete = { pendingDelete = reminder }
+                            )
+                        }
                     }
                 }
             }
@@ -400,6 +437,43 @@ fun MainScreen(
             onDismiss = { showCountryDialog = false }
         )
     }
+
+    // حوار حول التطبيق
+    if (showAbout) {
+        AboutDialog(onDismiss = { showAbout = false })
+    }
+}
+
+/** حوار "حول التطبيق" مع الاسم والإصدار ونبذة أمنية */
+@Composable
+private fun AboutDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val version = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "1.0"
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("حسناً") } },
+        title = { Text("تذكيرات واتساب") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("الإصدار $version", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "تطبيق يُذكّرك بإرسال رسائل واتساب في مواعيدها، ثم تفتح المحادثة " +
+                        "والرسالة جاهزة لترسلها بنفسك.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    "🔒 تذكير فقط — لا إرسال تلقائي، ولا أتمتة لواتساب. يحترم شروط " +
+                        "الاستخدام ويحمي حسابك.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    )
 }
 
 /** شريط يظهر أعلى الرئيسية عند وجود إعداد أذونات ناقص، مع أزرار إصلاح سريعة */
@@ -636,6 +710,7 @@ private fun PermissionRow(
 private fun OverflowMenu(
     onAutoOpen: () -> Unit,
     onCountryCode: () -> Unit,
+    onAbout: () -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
     onPickSound: () -> Unit
@@ -670,6 +745,52 @@ private fun OverflowMenu(
             leadingIcon = { Icon(Icons.Filled.FileUpload, contentDescription = null) },
             onClick = { expanded = false; onImport() }
         )
+        DropdownMenuItem(
+            text = { Text("حول التطبيق") },
+            leadingIcon = { Icon(Icons.Filled.Info, contentDescription = null) },
+            onClick = { expanded = false; onAbout() }
+        )
+    }
+}
+
+/** عنوان قسم داخل القائمة */
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 2.dp)
+    )
+}
+
+/** شارة الحالة (Pill ملوّن مع أيقونة) */
+@Composable
+private fun StatusChip(reminder: Reminder) {
+    val visual = reminder.status.toVisual()
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = visual.color.copy(alpha = 0.15f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = visual.icon,
+                contentDescription = null,
+                tint = visual.color,
+                modifier = Modifier.size(15.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = visual.label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = visual.color
+            )
+        }
     }
 }
 
@@ -679,30 +800,33 @@ private fun OverflowMenu(
 private fun ReminderCard(
     reminder: Reminder,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val visual = reminder.status.toVisual()
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ElevatedCard(
+        modifier = modifier.fillMaxWidth(),
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    // العنوان: الاسم إن وُجد، وإلا الرقم
-                    text = reminder.contactName.ifBlank { reminder.phoneNumber },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = reminder.contactName.ifBlank { reminder.phoneNumber },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    StatusChip(reminder)
+                }
                 Spacer(Modifier.height(4.dp))
-                // مقتطف من الرسالة (سطر واحد)
                 Text(
                     text = reminder.message,
                     style = MaterialTheme.typography.bodyMedium,
@@ -711,28 +835,21 @@ private fun ReminderCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    text = DateFormatter.formatShort(reminder.scheduledTime),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Spacer(Modifier.height(8.dp))
-                // شارة الحالة مع أيقونة ملونة
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = visual.icon,
+                        imageVector = Icons.Filled.Schedule,
                         contentDescription = null,
-                        tint = visual.color,
-                        modifier = Modifier.size(18.dp)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(15.dp)
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        text = visual.label,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = visual.color
+                        text = DateFormatter.formatRelative(reminder.scheduledTime),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
-            // زر حذف سريع
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Filled.Delete,
