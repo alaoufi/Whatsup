@@ -57,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -159,9 +160,12 @@ fun AddReminderScreen(
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
                 .imePadding(), // يمنع اختفاء الحقول تحت لوحة المفاتيح
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Spacer(Modifier.height(4.dp))
+            // نمط موحّد: نص غامق داخل الحقول
+            val fieldText = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
+
+            Spacer(Modifier.height(2.dp))
 
             // البحث في جهات الاتصال (اسم أو رقم)
             OutlinedTextField(
@@ -172,13 +176,14 @@ fun AddReminderScreen(
                         permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
                     }
                 },
-                label = { Text("ابحث عن جهة اتصال (اسم أو رقم)") },
+                label = { Text("بحث في جهات الاتصال", fontWeight = FontWeight.Bold) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                textStyle = fieldText,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // نتائج البحث
+            // نتائج البحث (مضغوطة)
             if (results.isNotEmpty()) {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column {
@@ -192,16 +197,16 @@ fun AddReminderScreen(
                                         query = ""
                                         results = emptyList()
                                     }
-                                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
                             ) {
                                 Text(
                                     text = contact.name.ifBlank { contact.number },
-                                    style = MaterialTheme.typography.bodyLarge
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold
                                 )
-                                // نوع الرقم + الرقم (لتمييز أرقام الاسم الواحد المتعددة)
                                 Text(
                                     text = "${contact.label} • ${contact.number}",
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -211,35 +216,38 @@ fun AddReminderScreen(
                 }
             }
 
-            // الرقم
+            // الرقم (نص مساعد يظهر فقط عند الخطأ أو وجود اسم جهة الاتصال)
             OutlinedTextField(
                 value = state.phoneNumber,
                 onValueChange = viewModel::onPhoneChange,
-                label = { Text("الرقم") },
+                label = { Text("الرقم", fontWeight = FontWeight.Bold) },
                 placeholder = { Text("مثال: +9665xxxxxxxx") },
-                supportingText = {
-                    Text(
-                        state.phoneError
-                            ?: if (state.contactName.isNotBlank())
-                                "جهة الاتصال: ${state.contactName}"
-                            else "اختر من البحث أو اكتب الرقم مع رمز الدولة"
-                    )
+                supportingText = when {
+                    state.phoneError != null -> {
+                        { Text(state.phoneError!!) }
+                    }
+                    state.contactName.isNotBlank() -> {
+                        { Text("جهة الاتصال: ${state.contactName}") }
+                    }
+                    else -> null
                 },
                 isError = state.phoneError != null,
+                textStyle = fieldText,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // نص الرسالة
+            // نص الرسالة (العدّاد داخل العنوان لتوفير الارتفاع)
             OutlinedTextField(
                 value = state.message,
                 onValueChange = viewModel::onMessageChange,
-                label = { Text("نص الرسالة") },
-                isError = state.messageError != null,
-                supportingText = {
-                    Text(state.messageError ?: "عدد الأحرف: ${state.messageLength}")
+                label = {
+                    Text("نص الرسالة (${state.messageLength})", fontWeight = FontWeight.Bold)
                 },
+                isError = state.messageError != null,
+                supportingText = state.messageError?.let { { Text(it) } },
+                textStyle = fieldText,
                 minLines = 2,
                 maxLines = 4,
                 modifier = Modifier.fillMaxWidth()
@@ -254,6 +262,7 @@ fun AddReminderScreen(
                 Text(
                     text = state.scheduledTime?.let { DateFormatter.formatFull(it) }
                         ?: "  اختر التاريخ والوقت",
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 8.dp)
                 )
             }
@@ -261,7 +270,7 @@ fun AddReminderScreen(
                 Text(
                     text = it,
                     color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
 
@@ -272,7 +281,7 @@ fun AddReminderScreen(
                 onCheckedChange = viewModel::onSoundEnabledChange
             )
             SettingRow(
-                label = "يفتح واتساب مباشرة عند الضغط",
+                label = "يفتح واتساب مباشرة",
                 checked = state.openWhatsAppDirectly,
                 onCheckedChange = viewModel::onOpenDirectlyChange
             )
@@ -282,9 +291,13 @@ fun AddReminderScreen(
                 onClick = { viewModel.save() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
+                    .height(48.dp)
             ) {
-                Text("حفظ التذكير", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "حفظ التذكير",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
             // مساحة سفلية لضمان الوصول لكل الحقول فوق لوحة المفاتيح
@@ -348,7 +361,12 @@ private fun SettingRow(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Bold
+        )
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
