@@ -31,24 +31,19 @@ class NotificationHelper @Inject constructor(
         const val EXTRA_MESSAGE = "extra_message"
     }
 
-    // تفضيلات الصوت (النغمة المختارة + إصدار القناة)
-    private val soundPrefs = SoundPreferences(context)
+    // تفضيلات التطبيق (النغمة + الصوت + سلوك الإشعار + إصدار القناة)
+    private val settings = SettingsPreferences(context)
 
-    /** معرّف القناة الحالي (يتضمّن رقم الإصدار لدعم تغيير النغمة) */
+    /** معرّف القناة الحالي (يتضمّن رقم الإصدار لدعم تغيير النغمة/الصوت) */
     private fun currentChannelId(): String =
-        CHANNEL_ID_PREFIX + soundPrefs.getChannelVersion()
+        CHANNEL_ID_PREFIX + settings.getChannelVersion()
 
     /**
-     * إنشاء قناة الإشعارات بأهمية عالية (HIGH) مع الصوت والاهتزاز.
-     * الصوت يُؤخذ من النغمة التي اختارها المستخدم (أو الافتراضية).
+     * إنشاء قناة الإشعارات بأهمية عالية (HIGH) مع الاهتزاز.
+     * الصوت يُؤخذ من النغمة المختارة، ويُكتم إن أوقف المستخدم الصوت.
      * آمنة للاستدعاء أكثر من مرة (النظام يتجاهل التكرار لنفس المعرّف).
      */
     fun createNotificationChannel() {
-        val audioAttributes = AudioAttributes.Builder()
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-            .build()
-
         val channel = NotificationChannel(
             currentChannelId(),
             CHANNEL_NAME,
@@ -58,8 +53,16 @@ class NotificationHelper @Inject constructor(
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 400, 200, 400)
             enableLights(true)
-            // تعيين النغمة المختارة على القناة
-            setSound(soundPrefs.getSoundUri(), audioAttributes)
+            if (settings.isSoundEnabled()) {
+                val audioAttributes = AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .build()
+                setSound(settings.getSoundUri(), audioAttributes)
+            } else {
+                // كتم الصوت — يكتفي المستخدم بالإشعار (والاهتزاز)
+                setSound(null, null)
+            }
         }
         context.getSystemService(NotificationManager::class.java)
             .createNotificationChannel(channel)
@@ -71,15 +74,34 @@ class NotificationHelper @Inject constructor(
      * (لأن Android لا يسمح بتغيير صوت قناة قائمة.)
      */
     fun updateSound(uri: Uri?) {
-        val manager = context.getSystemService(NotificationManager::class.java)
-        manager.deleteNotificationChannel(currentChannelId())
-        soundPrefs.setSoundUri(uri)
-        soundPrefs.bumpChannelVersion()
+        recreateChannel { settings.setSoundUri(uri) }
+    }
+
+    /** تفعيل/كتم صوت التنبيه (يعيد إنشاء القناة) */
+    fun setSoundEnabled(enabled: Boolean) {
+        recreateChannel { settings.setSoundEnabled(enabled) }
+    }
+
+    /** إعادة إنشاء القناة بعد تعديل إعداد يخصّ الصوت */
+    private fun recreateChannel(apply: () -> Unit) {
+        context.getSystemService(NotificationManager::class.java)
+            .deleteNotificationChannel(currentChannelId())
+        apply()
+        settings.bumpChannelVersion()
         createNotificationChannel()
     }
 
     /** النغمة المختارة حالياً (لعرضها في منتقي النغمات) */
-    fun currentSoundUri(): Uri = soundPrefs.getSoundUri()
+    fun currentSoundUri(): Uri = settings.getSoundUri()
+
+    /** هل الصوت مفعّل؟ */
+    fun isSoundEnabled(): Boolean = settings.isSoundEnabled()
+
+    /** هل يفتح الإشعار واتساب مباشرة؟ */
+    fun isOpenWhatsAppDirectly(): Boolean = settings.isOpenWhatsAppDirectly()
+
+    /** تعيين سلوك الإشعار (يفتح واتساب مباشرة أم إشعار فقط) */
+    fun setOpenWhatsAppDirectly(enabled: Boolean) = settings.setOpenWhatsAppDirectly(enabled)
 
     /**
      * عرض إشعار التذكير في موعده.
@@ -96,12 +118,19 @@ class NotificationHelper @Inject constructor(
         phoneNumber: String,
         message: String
     ) {
-        // نية تفتح واتساب مباشرة عبر الشاشة الوسيطة الشفافة عند الضغط على الإشعار
-        val intent = Intent(context, OpenWhatsAppActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_REMINDER_ID, reminderId)
-            putExtra(EXTRA_PHONE, phoneNumber)
-            putExtra(EXTRA_MESSAGE, message)
+        // حسب إعداد المستخدم: يفتح واتساب مباشرة، أو يفتح شاشة التفاصيل (إشعار فقط)
+        val intent = if (settings.isOpenWhatsAppDirectly()) {
+            Intent(context, OpenWhatsAppActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EXTRA_REMINDER_ID, reminderId)
+                putExtra(EXTRA_PHONE, phoneNumber)
+                putExtra(EXTRA_MESSAGE, message)
+            }
+        } else {
+            Intent(context, ReminderDetailActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EXTRA_REMINDER_ID, reminderId)
+            }
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
@@ -110,7 +139,7 @@ class NotificationHelper @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(context, currentChannelId())
+        val builder = NotificationCompat.Builder(context, currentChannelId())
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(context.getString(R.string.notification_title))
             .setContentText(context.getString(R.string.notification_text, contactName))
@@ -118,12 +147,17 @@ class NotificationHelper @Inject constructor(
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            // النغمة (تُستخدم على الإصدارات الأقدم؛ على Android 8+ تحكمها القناة)
-            .setSound(soundPrefs.getSoundUri())
             .setVibrate(longArrayOf(0, 400, 200, 400))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .build()
+
+        // النغمة على الإصدارات الأقدم فقط إن كان الصوت مفعّلاً (Android 8+ تحكمها القناة)
+        if (settings.isSoundEnabled()) {
+            builder.setSound(settings.getSoundUri())
+        } else {
+            builder.setSilent(true)
+        }
+        val notification = builder.build()
 
         // التحقق من صلاحية الإشعارات قبل العرض لتجنّب استثناء الأمان
         if (hasNotificationPermission()) {

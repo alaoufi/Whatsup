@@ -1,8 +1,6 @@
 package com.example.whatsappreminder.ui.add
 
 import android.Manifest
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
@@ -25,8 +23,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -36,8 +37,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimeInput
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,6 +63,7 @@ import com.example.whatsappreminder.util.ContactsSearch
 import com.example.whatsappreminder.util.DateFormatter
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.Calendar
+import java.util.TimeZone
 
 /**
  * شاشة إضافة تذكير جديد.
@@ -109,6 +115,11 @@ fun AddReminderScreen(
     // حقل البحث ونتائجه
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<ContactResult>>(emptyList()) }
+
+    // حالة عرض منتقيات التاريخ والوقت
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var pickedDateMillis by remember { mutableStateOf<Long?>(null) }
 
     // تحديث النتائج عند تغيّر نص البحث أو منح الصلاحية
     LaunchedEffect(query, hasContactsPermission) {
@@ -248,9 +259,9 @@ fun AddReminderScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // اختيار التاريخ والوقت
+            // اختيار التاريخ والوقت (يبدأ بالتاريخ ثم إدخال الوقت بالأرقام)
             OutlinedButton(
-                onClick = { showDateTimePicker(context, viewModel) },
+                onClick = { showDatePicker = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Filled.Event, contentDescription = null)
@@ -281,45 +292,67 @@ fun AddReminderScreen(
             }
         }
     }
-}
 
-/**
- * عرض منتقي التاريخ ثم الوقت بشكل متسلسل، وتمرير الناتج للـ ViewModel.
- */
-private fun showDateTimePicker(
-    context: android.content.Context,
-    viewModel: AddReminderViewModel
-) {
-    val now = Calendar.getInstance()
+    // --- منتقي التاريخ (Material 3، يدعم الإدخال بالأرقام) ---
+    if (showDatePicker) {
+        val today = System.currentTimeMillis()
+        val dateState = rememberDatePickerState(
+            initialSelectedDateMillis = pickedDateMillis ?: today
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickedDateMillis = dateState.selectedDateMillis
+                    showDatePicker = false
+                    showTimePicker = true // ننتقل لإدخال الوقت
+                }) { Text("التالي") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("إلغاء") }
+            }
+        ) {
+            DatePicker(state = dateState)
+        }
+    }
 
-    DatePickerDialog(
-        context,
-        { _, year, month, day ->
-            // بعد اختيار التاريخ، اعرض منتقي الوقت
-            TimePickerDialog(
-                context,
-                { _, hour, minute ->
-                    val selected = Calendar.getInstance().apply {
-                        set(Calendar.YEAR, year)
-                        set(Calendar.MONTH, month)
-                        set(Calendar.DAY_OF_MONTH, day)
-                        set(Calendar.HOUR_OF_DAY, hour)
-                        set(Calendar.MINUTE, minute)
-                        set(Calendar.SECOND, 0)
+    // --- منتقي الوقت بالأرقام (TimeInput = حقول HH:MM واضحة) ---
+    if (showTimePicker) {
+        val nowCal = Calendar.getInstance()
+        val timeState = rememberTimePickerState(
+            initialHour = nowCal.get(Calendar.HOUR_OF_DAY),
+            initialMinute = nowCal.get(Calendar.MINUTE),
+            is24Hour = false
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    // دمج التاريخ المختار مع الوقت (بمعالجة صحيحة للمنطقة الزمنية)
+                    val baseMillis = pickedDateMillis ?: System.currentTimeMillis()
+                    val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+                        .apply { timeInMillis = baseMillis }
+                    val local = Calendar.getInstance().apply {
+                        set(
+                            utc.get(Calendar.YEAR),
+                            utc.get(Calendar.MONTH),
+                            utc.get(Calendar.DAY_OF_MONTH),
+                            timeState.hour,
+                            timeState.minute,
+                            0
+                        )
                         set(Calendar.MILLISECOND, 0)
                     }
-                    viewModel.onTimeSelected(selected.timeInMillis)
-                },
-                now.get(Calendar.HOUR_OF_DAY),
-                now.get(Calendar.MINUTE),
-                false
-            ).show()
-        },
-        now.get(Calendar.YEAR),
-        now.get(Calendar.MONTH),
-        now.get(Calendar.DAY_OF_MONTH)
-    ).apply {
-        // منع اختيار تاريخ في الماضي
-        datePicker.minDate = now.timeInMillis
-    }.show()
+                    viewModel.onTimeSelected(local.timeInMillis)
+                    showTimePicker = false
+                }) { Text("حفظ") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) { Text("إلغاء") }
+            },
+            title = { Text("أدخل الوقت") },
+            text = { TimeInput(state = timeState) }
+        )
+    }
 }
+
