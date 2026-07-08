@@ -3,10 +3,12 @@ package com.example.whatsappreminder.ui.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.whatsappreminder.domain.model.Reminder
+import com.example.whatsappreminder.domain.model.ReminderStatus
 import com.example.whatsappreminder.domain.usecase.DeleteReminderUseCase
 import com.example.whatsappreminder.domain.usecase.ExportRemindersUseCase
 import com.example.whatsappreminder.domain.usecase.GetRemindersUseCase
 import com.example.whatsappreminder.domain.usecase.ImportRemindersUseCase
+import com.example.whatsappreminder.domain.usecase.UpdateReminderUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +38,8 @@ class MainViewModel @Inject constructor(
     getRemindersUseCase: GetRemindersUseCase,
     private val deleteReminderUseCase: DeleteReminderUseCase,
     private val exportRemindersUseCase: ExportRemindersUseCase,
-    private val importRemindersUseCase: ImportRemindersUseCase
+    private val importRemindersUseCase: ImportRemindersUseCase,
+    private val updateReminderUseCase: UpdateReminderUseCase
 ) : ViewModel() {
 
     // تحويل تدفق التذكيرات إلى حالة واجهة قابلة للمراقبة
@@ -56,6 +59,20 @@ class MainViewModel @Inject constructor(
     fun deleteReminder(reminder: Reminder) {
         viewModelScope.launch {
             deleteReminderUseCase(reminder)
+        }
+    }
+
+    /** وسم تذكير بأنه فُتح (بعد إرسال رسالته الفائتة) */
+    fun markOpened(reminder: Reminder) {
+        viewModelScope.launch {
+            updateReminderUseCase.updateStatus(reminder.id, ReminderStatus.OPENED)
+        }
+    }
+
+    /** تجاهل تذكير فائت (يُنقل للحالة EXPIRED فلا يظهر كفائت مجدداً) */
+    fun dismissMissed(reminder: Reminder) {
+        viewModelScope.launch {
+            updateReminderUseCase.updateStatus(reminder.id, ReminderStatus.EXPIRED)
         }
     }
 

@@ -68,6 +68,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.whatsappreminder.domain.model.Reminder
+import com.example.whatsappreminder.domain.model.ReminderStatus
 import com.example.whatsappreminder.ui.add.AddReminderActivity
 import com.example.whatsappreminder.ui.detail.ReminderDetailActivity
 import com.example.whatsappreminder.ui.theme.WhatsAppReminderTheme
@@ -75,6 +76,7 @@ import com.example.whatsappreminder.ui.toVisual
 import com.example.whatsappreminder.util.DateFormatter
 import com.example.whatsappreminder.util.NotificationHelper
 import com.example.whatsappreminder.util.SettingsPreferences
+import com.example.whatsappreminder.util.WhatsAppOpener
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -306,6 +308,64 @@ fun MainScreen(
             }
         )
     }
+
+    // فحص التذكيرات الفائتة: موعدها مضى وما زالت مجدولة (لم يُطلق تنبيهها)
+    val missed = remember(uiState.reminders) {
+        val now = System.currentTimeMillis()
+        uiState.reminders.filter {
+            it.scheduledTime <= now &&
+                (it.status == ReminderStatus.SCHEDULED ||
+                    it.status == ReminderStatus.PENDING_NETWORK)
+        }
+    }
+    if (!showOnboarding && missed.isNotEmpty()) {
+        MissedReminderDialog(
+            reminder = missed.first(),
+            onSend = { r ->
+                WhatsAppOpener.openChat(context, r.phoneNumber, r.message)
+                viewModel.markOpened(r)
+            },
+            onDismiss = { r -> viewModel.dismissMissed(r) }
+        )
+    }
+}
+
+/**
+ * حوار يُعرض عند وجود تذكير فائت (مضى موعده دون تنبيه، مثلاً كان الجهاز مغلقاً).
+ * يسأل المستخدم إن كان يرغب بإرسال الرسالة الآن.
+ */
+@Composable
+private fun MissedReminderDialog(
+    reminder: Reminder,
+    onSend: (Reminder) -> Unit,
+    onDismiss: (Reminder) -> Unit
+) {
+    val title = reminder.contactName.ifBlank { reminder.phoneNumber }
+    AlertDialog(
+        onDismissRequest = { /* يُغلق فقط بأحد الزرين */ },
+        confirmButton = {
+            Button(onClick = { onSend(reminder) }) { Text("إرسال الآن") }
+        },
+        dismissButton = {
+            TextButton(onClick = { onDismiss(reminder) }) { Text("تجاهل") }
+        },
+        title = { Text("لديك تذكير فائت") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("فات موعد إرسال رسالة إلى: $title")
+                Text(
+                    text = reminder.message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "الموعد: ${DateFormatter.formatFull(reminder.scheduledTime)}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text("هل ترغب بإرسالها الآن؟", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    )
 }
 
 /** شاشة ترحيب تطلب كل الأذونات المطلوبة عند أول تشغيل */
