@@ -8,6 +8,10 @@
     <string name="notification_expired_title">فات موعد التذكير</string>
     <string name="notification_expired_text">لم يتم إرسال رسالتك إلى %1$s في موعدها</string>
 
+    <!-- إشعار الرسالة الفائتة بعد تشغيل الجهاز -->
+    <string name="notification_missed_title">لديك رسالة فائتة</string>
+    <string name="notification_missed_text">فات موعد رسالتك إلى %1$s — اضغط لإرسالها الآن</string>
+
     <!-- رسائل الأخطاء -->
     <string name="error_whatsapp_not_found">تعذّر فتح واتساب. تأكد من تثبيته على جهازك.</string>
 </resources>

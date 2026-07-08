@@ -165,6 +165,52 @@ class NotificationHelper @Inject constructor(
     }
 
     /**
+     * عرض إشعار "رسالة فائتة" بعد تشغيل الجهاز:
+     * يخبر المستخدم بوجود تذكير فات موعده، والضغط عليه يفتح واتساب لإرسال الرسالة.
+     */
+    fun showMissedNotification(
+        reminderId: Long,
+        contactName: String,
+        phoneNumber: String,
+        message: String,
+        soundEnabled: Boolean
+    ) {
+        // الضغط على الإشعار يفتح واتساب مباشرة بالرسالة الجاهزة
+        val intent = Intent(context, OpenWhatsAppActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_REMINDER_ID, reminderId)
+            putExtra(EXTRA_PHONE, phoneNumber)
+            putExtra(EXTRA_MESSAGE, message)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            reminderId.toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val channelId = if (soundEnabled) soundChannelId() else SILENT_CHANNEL_ID
+
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(context.getString(R.string.notification_missed_title))
+            .setContentText(context.getString(R.string.notification_missed_text, contactName))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVibrate(longArrayOf(0, 400, 200, 400))
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+
+        if (soundEnabled) builder.setSound(settings.getSoundUri()) else builder.setSilent(true)
+
+        if (hasNotificationPermission()) {
+            NotificationManagerCompat.from(context)
+                .notify(reminderId.toInt(), builder.build())
+        }
+    }
+
+    /**
      * عرض إشعار بأن الموعد قد فات (للحالة EXPIRED).
      */
     fun showExpiredNotification(reminderId: Long, contactName: String) {
