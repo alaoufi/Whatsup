@@ -198,13 +198,12 @@ fun AddReminderScreen(
                                     text = contact.name.ifBlank { contact.number },
                                     style = MaterialTheme.typography.bodyLarge
                                 )
-                                if (contact.name.isNotBlank()) {
-                                    Text(
-                                        text = contact.number,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                // نوع الرقم + الرقم (لتمييز أرقام الاسم الواحد المتعددة)
+                                Text(
+                                    text = "${contact.label} • ${contact.number}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                             if (index < results.lastIndex) Divider()
                         }
