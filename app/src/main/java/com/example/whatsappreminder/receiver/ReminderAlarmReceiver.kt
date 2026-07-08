@@ -57,12 +57,14 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                     repository.updateStatus(reminderId, ReminderStatus.EXPIRED)
                     notificationHelper.showExpiredNotification(reminderId, title)
                 } else {
-                    // الحالة الطبيعية: إشعار في الوقت المحدّد
+                    // الحالة الطبيعية: إشعار في الوقت المحدّد بإعدادات هذا التذكير
                     notificationHelper.showReminderNotification(
                         reminderId = reminderId,
                         contactName = title,
                         phoneNumber = reminder.phoneNumber,
-                        message = reminder.message
+                        message = reminder.message,
+                        soundEnabled = reminder.soundEnabled,
+                        openDirectly = reminder.openWhatsAppDirectly
                     )
                     repository.updateStatus(reminderId, ReminderStatus.NOTIFIED, notifiedAt = now)
                 }

@@ -37,7 +37,13 @@ data class ReminderEntity(
     val notifiedAt: Long? = null,
 
     @ColumnInfo(name = "notes")
-    val notes: String = ""
+    val notes: String = "",
+
+    @ColumnInfo(name = "sound_enabled", defaultValue = "1")
+    val soundEnabled: Boolean = true,
+
+    @ColumnInfo(name = "open_whatsapp_directly", defaultValue = "1")
+    val openWhatsAppDirectly: Boolean = true
 )
 
 /**
@@ -54,7 +60,9 @@ fun ReminderEntity.toDomain(): Reminder = Reminder(
         .getOrDefault(ReminderStatus.SCHEDULED),
     createdAt = createdAt,
     notifiedAt = notifiedAt,
-    notes = notes
+    notes = notes,
+    soundEnabled = soundEnabled,
+    openWhatsAppDirectly = openWhatsAppDirectly
 )
 
 /**
@@ -69,5 +77,7 @@ fun Reminder.toEntity(): ReminderEntity = ReminderEntity(
     status = status.name,
     createdAt = createdAt,
     notifiedAt = notifiedAt,
-    notes = notes
+    notes = notes,
+    soundEnabled = soundEnabled,
+    openWhatsAppDirectly = openWhatsAppDirectly
 )

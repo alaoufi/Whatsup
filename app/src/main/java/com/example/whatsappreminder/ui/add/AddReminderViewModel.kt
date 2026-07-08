@@ -20,6 +20,8 @@ data class AddReminderUiState(
     val message: String = "",
     val notes: String = "",
     val scheduledTime: Long? = null,
+    val soundEnabled: Boolean = true,
+    val openWhatsAppDirectly: Boolean = true,
     val contactNameError: String? = null,
     val phoneError: String? = null,
     val messageError: String? = null,
@@ -55,6 +57,12 @@ class AddReminderViewModel @Inject constructor(
 
     fun onTimeSelected(millis: Long) =
         _uiState.update { it.copy(scheduledTime = millis, timeError = null) }
+
+    fun onSoundEnabledChange(value: Boolean) =
+        _uiState.update { it.copy(soundEnabled = value) }
+
+    fun onOpenDirectlyChange(value: Boolean) =
+        _uiState.update { it.copy(openWhatsAppDirectly = value) }
 
     /**
      * التحقق من صحة المدخلات ثم حفظ التذكير.
@@ -106,7 +114,9 @@ class AddReminderViewModel @Inject constructor(
                 message = state.message.trim(),
                 scheduledTime = state.scheduledTime!!,
                 status = ReminderStatus.SCHEDULED,
-                notes = state.notes.trim()
+                notes = state.notes.trim(),
+                soundEnabled = state.soundEnabled,
+                openWhatsAppDirectly = state.openWhatsAppDirectly
             )
             addReminderUseCase(reminder)
             _uiState.update { it.copy(isSaved = true) }

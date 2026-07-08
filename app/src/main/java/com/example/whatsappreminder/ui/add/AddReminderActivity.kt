@@ -11,11 +11,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -29,29 +32,31 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimeInput
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -91,7 +96,7 @@ fun AddReminderScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    // حالة صلاحية قراءة جهات الاتصال
+    // صلاحية قراءة جهات الاتصال
     var hasContactsPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -105,32 +110,24 @@ fun AddReminderScreen(
         hasContactsPermission = granted
         if (!granted) {
             Toast.makeText(
-                context,
-                "امنح صلاحية جهات الاتصال أو اكتب الرقم يدوياً",
-                Toast.LENGTH_LONG
+                context, "امنح صلاحية جهات الاتصال أو اكتب الرقم يدوياً", Toast.LENGTH_LONG
             ).show()
         }
     }
 
-    // حقل البحث ونتائجه
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<ContactResult>>(emptyList()) }
 
-    // حالة عرض منتقيات التاريخ والوقت
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var pickedDateMillis by remember { mutableStateOf<Long?>(null) }
 
-    // تحديث النتائج عند تغيّر نص البحث أو منح الصلاحية
     LaunchedEffect(query, hasContactsPermission) {
         results = if (hasContactsPermission && query.isNotBlank()) {
             ContactsSearch.search(context, query)
-        } else {
-            emptyList()
-        }
+        } else emptyList()
     }
 
-    // عند الحفظ الناجح، أغلق الشاشة
     LaunchedEffect(state.isSaved) {
         if (state.isSaved) {
             Toast.makeText(context, "تم حفظ التذكير", Toast.LENGTH_SHORT).show()
@@ -159,16 +156,18 @@ fun AddReminderScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState())
+                .imePadding(), // يمنع اختفاء الحقول تحت لوحة المفاتيح
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // حقل البحث في جهات الاتصال (اسم أو رقم)
+            Spacer(Modifier.height(4.dp))
+
+            // البحث في جهات الاتصال (اسم أو رقم)
             OutlinedTextField(
                 value = query,
                 onValueChange = { q ->
                     query = q
-                    // طلب الصلاحية عند أول استخدام إن لم تُمنح بعد
                     if (q.isNotBlank() && !hasContactsPermission) {
                         permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
                     }
@@ -179,7 +178,7 @@ fun AddReminderScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // نتائج البحث — اضغط لاختيار الرقم
+            // نتائج البحث
             if (results.isNotEmpty()) {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column {
@@ -188,17 +187,16 @@ fun AddReminderScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        // ملء الرقم والاسم (الاسم يُحفظ للعرض فقط)
                                         viewModel.onContactNameChange(contact.name)
                                         viewModel.onPhoneChange(contact.number)
                                         query = ""
                                         results = emptyList()
                                     }
-                                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                                    .padding(horizontal = 14.dp, vertical = 10.dp)
                             ) {
                                 Text(
                                     text = contact.name.ifBlank { contact.number },
-                                    style = MaterialTheme.typography.titleMedium
+                                    style = MaterialTheme.typography.bodyLarge
                                 )
                                 if (contact.name.isNotBlank()) {
                                     Text(
@@ -214,7 +212,7 @@ fun AddReminderScreen(
                 }
             }
 
-            // رقم الهاتف (يُملأ من البحث أو يُكتب يدوياً)
+            // الرقم
             OutlinedTextField(
                 value = state.phoneNumber,
                 onValueChange = viewModel::onPhoneChange,
@@ -225,7 +223,7 @@ fun AddReminderScreen(
                         state.phoneError
                             ?: if (state.contactName.isNotBlank())
                                 "جهة الاتصال: ${state.contactName}"
-                            else "اختر من البحث بالأعلى أو اكتب الرقم مع رمز الدولة"
+                            else "اختر من البحث أو اكتب الرقم مع رمز الدولة"
                     )
                 },
                 isError = state.phoneError != null,
@@ -234,32 +232,21 @@ fun AddReminderScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // نص الرسالة (متعدد الأسطر + عداد أحرف)
+            // نص الرسالة
             OutlinedTextField(
                 value = state.message,
                 onValueChange = viewModel::onMessageChange,
                 label = { Text("نص الرسالة") },
                 isError = state.messageError != null,
                 supportingText = {
-                    // عرض الخطأ إن وُجد، وإلا عرض عدّاد الأحرف
                     Text(state.messageError ?: "عدد الأحرف: ${state.messageLength}")
                 },
-                minLines = 3,
-                maxLines = 6,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            // ملاحظات اختيارية
-            OutlinedTextField(
-                value = state.notes,
-                onValueChange = viewModel::onNotesChange,
-                label = { Text("ملاحظات (اختياري)") },
                 minLines = 2,
                 maxLines = 4,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // اختيار التاريخ والوقت (يبدأ بالتاريخ ثم إدخال الوقت بالأرقام)
+            // اختيار التاريخ والوقت
             OutlinedButton(
                 onClick = { showDatePicker = true },
                 modifier = Modifier.fillMaxWidth()
@@ -279,25 +266,37 @@ fun AddReminderScreen(
                 )
             }
 
-            Spacer(Modifier.height(8.dp))
+            // إعدادات هذا التذكير
+            SettingRow(
+                label = "صوت التنبيه",
+                checked = state.soundEnabled,
+                onCheckedChange = viewModel::onSoundEnabledChange
+            )
+            SettingRow(
+                label = "يفتح واتساب مباشرة عند الضغط",
+                checked = state.openWhatsAppDirectly,
+                onCheckedChange = viewModel::onOpenDirectlyChange
+            )
 
             // زر الحفظ
             Button(
                 onClick = { viewModel.save() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(50.dp)
             ) {
                 Text("حفظ التذكير", style = MaterialTheme.typography.titleMedium)
             }
+
+            // مساحة سفلية لضمان الوصول لكل الحقول فوق لوحة المفاتيح
+            Spacer(Modifier.height(24.dp))
         }
     }
 
-    // --- منتقي التاريخ (Material 3، يدعم الإدخال بالأرقام) ---
+    // منتقي التاريخ (Material 3)
     if (showDatePicker) {
-        val today = System.currentTimeMillis()
         val dateState = rememberDatePickerState(
-            initialSelectedDateMillis = pickedDateMillis ?: today
+            initialSelectedDateMillis = pickedDateMillis ?: System.currentTimeMillis()
         )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -305,54 +304,162 @@ fun AddReminderScreen(
                 TextButton(onClick = {
                     pickedDateMillis = dateState.selectedDateMillis
                     showDatePicker = false
-                    showTimePicker = true // ننتقل لإدخال الوقت
+                    showTimePicker = true
                 }) { Text("التالي") }
             },
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) { Text("إلغاء") }
             }
-        ) {
-            DatePicker(state = dateState)
-        }
+        ) { DatePicker(state = dateState) }
     }
 
-    // --- منتقي الوقت بالأرقام (TimeInput = حقول HH:MM واضحة) ---
+    // منتقي الوقت عبر قوائم اختيار (ساعة / دقيقة / ص-م)
     if (showTimePicker) {
-        val nowCal = Calendar.getInstance()
-        val timeState = rememberTimePickerState(
-            initialHour = nowCal.get(Calendar.HOUR_OF_DAY),
-            initialMinute = nowCal.get(Calendar.MINUTE),
-            is24Hour = false
-        )
-        AlertDialog(
-            onDismissRequest = { showTimePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    // دمج التاريخ المختار مع الوقت (بمعالجة صحيحة للمنطقة الزمنية)
-                    val baseMillis = pickedDateMillis ?: System.currentTimeMillis()
-                    val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-                        .apply { timeInMillis = baseMillis }
-                    val local = Calendar.getInstance().apply {
-                        set(
-                            utc.get(Calendar.YEAR),
-                            utc.get(Calendar.MONTH),
-                            utc.get(Calendar.DAY_OF_MONTH),
-                            timeState.hour,
-                            timeState.minute,
-                            0
-                        )
-                        set(Calendar.MILLISECOND, 0)
-                    }
-                    viewModel.onTimeSelected(local.timeInMillis)
-                    showTimePicker = false
-                }) { Text("حفظ") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("إلغاء") }
-            },
-            title = { Text("أدخل الوقت") },
-            text = { TimeInput(state = timeState) }
+        TimeDropdownDialog(
+            onDismiss = { showTimePicker = false },
+            onConfirm = { hour24, minute ->
+                val base = pickedDateMillis ?: System.currentTimeMillis()
+                val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                    timeInMillis = base
+                }
+                val local = Calendar.getInstance().apply {
+                    set(
+                        utc.get(Calendar.YEAR),
+                        utc.get(Calendar.MONTH),
+                        utc.get(Calendar.DAY_OF_MONTH),
+                        hour24, minute, 0
+                    )
+                    set(Calendar.MILLISECOND, 0)
+                }
+                viewModel.onTimeSelected(local.timeInMillis)
+                showTimePicker = false
+            }
         )
     }
 }
 
+/** صف إعداد: نص + مفتاح تبديل */
+@Composable
+private fun SettingRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/**
+ * حوار اختيار الوقت عبر قوائم منسدلة (ساعة 1–12، دقيقة 00–59، ص/م).
+ * الاختيار من قائمة وليس كتابة.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimeDropdownDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (hour24: Int, minute: Int) -> Unit
+) {
+    val now = remember { Calendar.getInstance() }
+    val initHour24 = now.get(Calendar.HOUR_OF_DAY)
+    var hour12 by remember {
+        mutableStateOf((initHour24 % 12).let { if (it == 0) 12 else it })
+    }
+    var minute by remember { mutableStateOf(now.get(Calendar.MINUTE)) }
+    var isPm by remember { mutableStateOf(initHour24 >= 12) }
+
+    val hourOptions = remember { (1..12).map { it.toString() } }
+    val minuteOptions = remember { (0..59).map { "%02d".format(it) } }
+    val periodOptions = listOf("ص", "م")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                // تحويل من نظام 12 إلى 24 ساعة
+                val hour24 = when {
+                    isPm && hour12 == 12 -> 12
+                    isPm -> hour12 + 12
+                    !isPm && hour12 == 12 -> 0
+                    else -> hour12
+                }
+                onConfirm(hour24, minute)
+            }) { Text("حفظ") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } },
+        title = { Text("اختر الوقت") },
+        text = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LabeledDropdown(
+                    label = "ساعة",
+                    options = hourOptions,
+                    selectedIndex = hour12 - 1,
+                    onSelected = { hour12 = it + 1 },
+                    modifier = Modifier.weight(1f)
+                )
+                LabeledDropdown(
+                    label = "دقيقة",
+                    options = minuteOptions,
+                    selectedIndex = minute,
+                    onSelected = { minute = it },
+                    modifier = Modifier.weight(1f)
+                )
+                LabeledDropdown(
+                    label = "ص/م",
+                    options = periodOptions,
+                    selectedIndex = if (isPm) 1 else 0,
+                    onSelected = { isPm = it == 1 },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    )
+}
+
+/** قائمة منسدلة معنونة للاختيار (وليس الكتابة) */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LabeledDropdown(
+    label: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = options.getOrElse(selectedIndex) { "" },
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth()
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEachIndexed { index, option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onSelected(index)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}

@@ -13,6 +13,8 @@ package com.example.whatsappreminder.domain.model
  * @property createdAt وقت إنشاء التذكير بالميلي ثانية
  * @property notifiedAt وقت إرسال الإشعار (null إذا لم يُرسل بعد)
  * @property notes ملاحظات إضافية اختيارية
+ * @property soundEnabled هل يصدر هذا التذكير صوتاً عند التنبيه؟ (لكل تذكير على حدة)
+ * @property openWhatsAppDirectly هل يفتح إشعار هذا التذكير واتساب مباشرة؟ (لكل تذكير)
  */
 data class Reminder(
     val id: Long = 0L,
@@ -23,7 +25,9 @@ data class Reminder(
     val status: ReminderStatus = ReminderStatus.SCHEDULED,
     val createdAt: Long = System.currentTimeMillis(),
     val notifiedAt: Long? = null,
-    val notes: String = ""
+    val notes: String = "",
+    val soundEnabled: Boolean = true,
+    val openWhatsAppDirectly: Boolean = true
 )
 
 /**

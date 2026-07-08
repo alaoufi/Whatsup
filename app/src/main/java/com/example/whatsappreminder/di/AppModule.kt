@@ -30,7 +30,11 @@ object AppModule {
             context,
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
-        ).build()
+        )
+            .addMigrations(AppDatabase.MIGRATION_1_2)
+            // شبكة أمان: في حال أي فرق مخطط غير متوقع أثناء التطوير
+            .fallbackToDestructiveMigration()
+            .build()
 
     /** توفير الـ DAO من قاعدة البيانات */
     @Provides

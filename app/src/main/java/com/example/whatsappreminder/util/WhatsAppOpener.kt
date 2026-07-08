@@ -30,18 +30,27 @@ object WhatsAppOpener {
         // ترميز الرسالة لتكون صالحة داخل عنوان URL
         val encodedMessage = URLEncoder.encode(message, "UTF-8")
 
-        // رابط wa.me الرسمي — الطريقة الوحيدة المسموح بها لفتح واتساب
-        val url = "https://wa.me/$sanitizedNumber?text=$encodedMessage"
-
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+        // 1) المحاولة الأولى: مخطط whatsapp:// يفتح واتساب مباشرة دون الحاجة لمتصفح
+        val directUri = Uri.parse("whatsapp://send?phone=$sanitizedNumber&text=$encodedMessage")
+        val directIntent = Intent(Intent.ACTION_VIEW, directUri).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
+        try {
+            context.startActivity(directIntent)
+            return true
+        } catch (_: Exception) {
+            // لا يوجد واتساب يستجيب لهذا المخطط — نجرّب الطريقة الاحتياطية
+        }
 
+        // 2) الطريقة الاحتياطية: رابط wa.me الرسمي (قد يمرّ عبر المتصفح)
+        val webUri = Uri.parse("https://wa.me/$sanitizedNumber?text=$encodedMessage")
+        val webIntent = Intent(Intent.ACTION_VIEW, webUri).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
         return try {
-            context.startActivity(intent)
+            context.startActivity(webIntent)
             true
         } catch (e: Exception) {
-            // في حال عدم توفّر تطبيق يفتح الرابط
             Toast.makeText(
                 context,
                 context.getString(R.string.error_whatsapp_not_found),

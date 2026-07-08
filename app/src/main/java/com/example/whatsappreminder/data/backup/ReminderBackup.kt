@@ -30,6 +30,8 @@ object ReminderBackup {
                 // القيمة الفارغة تُخزّن كـ JSONObject.NULL
                 put("notifiedAt", r.notifiedAt ?: JSONObject.NULL)
                 put("notes", r.notes)
+                put("soundEnabled", r.soundEnabled)
+                put("openWhatsAppDirectly", r.openWhatsAppDirectly)
             }
             array.put(obj)
         }
@@ -64,7 +66,9 @@ object ReminderBackup {
                     status = status,
                     createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
                     notifiedAt = if (obj.isNull("notifiedAt")) null else obj.optLong("notifiedAt"),
-                    notes = obj.optString("notes", "")
+                    notes = obj.optString("notes", ""),
+                    soundEnabled = obj.optBoolean("soundEnabled", true),
+                    openWhatsAppDirectly = obj.optBoolean("openWhatsAppDirectly", true)
                 )
             )
         }

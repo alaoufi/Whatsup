@@ -32,10 +32,6 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -134,10 +130,6 @@ fun MainScreen(
     // نص التصدير المؤقت بانتظار اختيار المستخدم لمكان الحفظ
     var pendingExport by remember { mutableStateOf<String?>(null) }
 
-    // حالة إعدادات الصوت وسلوك الإشعار (تُقرأ من التفضيلات)
-    var soundEnabled by remember { mutableStateOf(NotificationHelper(context).isSoundEnabled()) }
-    var openDirectly by remember { mutableStateOf(NotificationHelper(context).isOpenWhatsAppDirectly()) }
-
     // مُطلق حفظ ملف النسخة الاحتياطية
     val createDocLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -203,29 +195,6 @@ fun MainScreen(
                 title = { Text("تذكيرات واتساب") },
                 actions = {
                     OverflowMenu(
-                        soundEnabled = soundEnabled,
-                        openDirectly = openDirectly,
-                        onToggleSound = {
-                            val newValue = !soundEnabled
-                            NotificationHelper(context).setSoundEnabled(newValue)
-                            soundEnabled = newValue
-                            Toast.makeText(
-                                context,
-                                if (newValue) "تم تفعيل صوت التنبيه" else "تم كتم الصوت (إشعار صامت)",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        },
-                        onToggleBehavior = {
-                            val newValue = !openDirectly
-                            NotificationHelper(context).setOpenWhatsAppDirectly(newValue)
-                            openDirectly = newValue
-                            Toast.makeText(
-                                context,
-                                if (newValue) "الإشعار سيفتح واتساب مباشرة"
-                                else "الإشعار سيفتح التطبيق فقط",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        },
                         onExport = { viewModel.requestExport() },
                         onImport = { openDocLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
                         onPickSound = {
@@ -283,13 +252,9 @@ fun MainScreen(
     }
 }
 
-/** قائمة منسدلة (⋮) للإعدادات والتصدير والاستيراد */
+/** قائمة منسدلة (⋮) للنغمة والتصدير والاستيراد */
 @Composable
 private fun OverflowMenu(
-    soundEnabled: Boolean,
-    openDirectly: Boolean,
-    onToggleSound: () -> Unit,
-    onToggleBehavior: () -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
     onPickSound: () -> Unit
@@ -299,30 +264,6 @@ private fun OverflowMenu(
         Icon(Icons.Filled.MoreVert, contentDescription = "خيارات")
     }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-        // تفعيل/كتم صوت التنبيه
-        DropdownMenuItem(
-            text = { Text(if (soundEnabled) "الصوت: مفعّل" else "الصوت: صامت") },
-            leadingIcon = {
-                Icon(
-                    if (soundEnabled) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
-                    contentDescription = null
-                )
-            },
-            onClick = { expanded = false; onToggleSound() }
-        )
-        // سلوك الإشعار: يفتح واتساب مباشرة أم إشعار فقط
-        DropdownMenuItem(
-            text = {
-                Text(if (openDirectly) "الإشعار: يفتح واتساب" else "الإشعار: إشعار فقط")
-            },
-            leadingIcon = {
-                Icon(
-                    if (openDirectly) Icons.Filled.OpenInNew else Icons.Filled.Notifications,
-                    contentDescription = null
-                )
-            },
-            onClick = { expanded = false; onToggleBehavior() }
-        )
         DropdownMenuItem(
             text = { Text("نغمة التنبيه") },
             leadingIcon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
