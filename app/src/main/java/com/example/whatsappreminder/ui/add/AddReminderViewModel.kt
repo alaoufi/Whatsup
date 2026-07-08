@@ -5,10 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.whatsappreminder.domain.model.Reminder
 import com.example.whatsappreminder.domain.model.ReminderStatus
 import com.example.whatsappreminder.domain.usecase.AddReminderUseCase
+import com.example.whatsappreminder.domain.usecase.GetRemindersUseCase
+import com.example.whatsappreminder.domain.usecase.UpdateReminderUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -26,22 +29,52 @@ data class AddReminderUiState(
     val phoneError: String? = null,
     val messageError: String? = null,
     val timeError: String? = null,
-    val isSaved: Boolean = false
+    val isSaved: Boolean = false,
+    val isEditing: Boolean = false
 ) {
     // عدد أحرف الرسالة (للعدّاد)
     val messageLength: Int get() = message.length
 }
 
 /**
- * ViewModel لشاشة إضافة تذكير: يدير الحقول ويتحقق من صحتها قبل الحفظ.
+ * ViewModel لشاشة إضافة/تعديل تذكير: يدير الحقول ويتحقق من صحتها قبل الحفظ.
  */
 @HiltViewModel
 class AddReminderViewModel @Inject constructor(
-    private val addReminderUseCase: AddReminderUseCase
+    private val addReminderUseCase: AddReminderUseCase,
+    private val getRemindersUseCase: GetRemindersUseCase,
+    private val updateReminderUseCase: UpdateReminderUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddReminderUiState())
     val uiState: StateFlow<AddReminderUiState> = _uiState.asStateFlow()
+
+    // معرّف التذكير عند التعديل (0 = إضافة جديدة)
+    private var editingId: Long = 0L
+    // حقول التذكير الأصلي التي لا تُعدّل من الواجهة (وقت الإنشاء مثلاً)
+    private var originalCreatedAt: Long = System.currentTimeMillis()
+
+    /** تحميل تذكير موجود لتعديله وملء الحقول */
+    fun loadForEdit(id: Long) {
+        if (id <= 0L || editingId == id) return
+        viewModelScope.launch {
+            val reminder = getRemindersUseCase.byId(id).first() ?: return@launch
+            editingId = reminder.id
+            originalCreatedAt = reminder.createdAt
+            _uiState.update {
+                it.copy(
+                    contactName = reminder.contactName,
+                    phoneNumber = reminder.phoneNumber,
+                    message = reminder.message,
+                    notes = reminder.notes,
+                    scheduledTime = reminder.scheduledTime,
+                    soundEnabled = reminder.soundEnabled,
+                    openWhatsAppDirectly = reminder.openWhatsAppDirectly,
+                    isEditing = true
+                )
+            }
+        }
+    }
 
     fun onContactNameChange(value: String) =
         _uiState.update { it.copy(contactName = value, contactNameError = null) }
@@ -106,19 +139,26 @@ class AddReminderViewModel @Inject constructor(
 
         if (!valid) return
 
-        // حفظ التذكير عبر حالة الاستخدام
+        // حفظ التذكير (إضافة جديدة أو تحديث الموجود)
         viewModelScope.launch {
             val reminder = Reminder(
+                id = editingId,
                 contactName = state.contactName.trim(),
                 phoneNumber = state.phoneNumber.trim(),
                 message = state.message.trim(),
                 scheduledTime = state.scheduledTime!!,
                 status = ReminderStatus.SCHEDULED,
+                createdAt = if (editingId > 0L) originalCreatedAt else System.currentTimeMillis(),
                 notes = state.notes.trim(),
                 soundEnabled = state.soundEnabled,
                 openWhatsAppDirectly = state.openWhatsAppDirectly
             )
-            addReminderUseCase(reminder)
+            if (editingId > 0L) {
+                // تحديث: يعيد الجدولة بالوقت الجديد لأن الحالة SCHEDULED
+                updateReminderUseCase(reminder)
+            } else {
+                addReminderUseCase(reminder)
+            }
             _uiState.update { it.copy(isSaved = true) }
         }
     }

@@ -26,7 +26,9 @@ object WhatsAppOpener {
      * @return true إذا نجح فتح واتساب
      */
     fun openChat(context: Context, phoneNumber: String, message: String): Boolean {
-        val number = phoneNumber.filter { it.isDigit() }
+        // تطبيع الرقم لصيغة دولية باستخدام رمز الدولة الافتراضي
+        val countryCode = SettingsPreferences(context).getDefaultCountryCode()
+        val number = PhoneNumberNormalizer.normalize(phoneNumber, countryCode)
         val text = URLEncoder.encode(message, "UTF-8")
         val url = "https://api.whatsapp.com/send?phone=$number&text=$text"
 

@@ -3,6 +3,7 @@ package com.example.whatsappreminder.ui.detail
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
@@ -143,6 +145,16 @@ fun ReminderDetailScreen(
                         message = reminder.message
                     )
                 },
+                onEdit = {
+                    // فتح شاشة الإضافة في وضع التعديل بمعرّف هذا التذكير
+                    val intent = Intent(
+                        context,
+                        com.example.whatsappreminder.ui.add.AddReminderActivity::class.java
+                    ).apply {
+                        putExtra(NotificationHelper.EXTRA_REMINDER_ID, reminder.id)
+                    }
+                    context.startActivity(intent)
+                },
                 onCancel = { viewModel.cancelReminder() },
                 onReschedule = {
                     showDateTimePicker(context) { newTime ->
@@ -160,6 +172,7 @@ private fun DetailContent(
     modifier: Modifier = Modifier,
     reminder: Reminder,
     onOpenWhatsApp: () -> Unit,
+    onEdit: () -> Unit,
     onCancel: () -> Unit,
     onReschedule: () -> Unit,
     onDelete: () -> Unit
@@ -232,6 +245,16 @@ private fun DetailContent(
             Icon(Icons.Filled.Send, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("فتح واتساب وإرسال", style = MaterialTheme.typography.titleMedium)
+        }
+
+        // زر تعديل التذكير
+        OutlinedButton(
+            onClick = onEdit,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Filled.Edit, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("تعديل")
         }
 
         // زر الإلغاء يظهر فقط إن كان التذكير مجدولاً

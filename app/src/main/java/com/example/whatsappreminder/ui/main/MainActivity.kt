@@ -7,6 +7,7 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -47,19 +49,30 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -119,6 +132,14 @@ fun MainScreen(
 
     // نص التصدير المؤقت بانتظار اختيار المستخدم لمكان الحفظ
     var pendingExport by remember { mutableStateOf<String?>(null) }
+
+    // Snackbar للتراجع عن الحذف
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    // التذكير المُنتظر تأكيد حذفه
+    var pendingDelete by remember { mutableStateOf<Reminder?>(null) }
+    // إظهار حوار رمز الدولة
+    var showCountryDialog by remember { mutableStateOf(false) }
 
     // شاشة الترحيب/الأذونات عند أول تشغيل
     val settingsPrefs = remember { SettingsPreferences(context) }
@@ -210,6 +231,7 @@ fun MainScreen(
                                 runCatching { context.startActivity(intent) }
                             }
                         },
+                        onCountryCode = { showCountryDialog = true },
                         onExport = { viewModel.requestExport() },
                         onImport = { openDocLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
                         onPickSound = {
@@ -242,25 +264,34 @@ fun MainScreen(
             FloatingActionButton(onClick = onAddClick) {
                 Icon(Icons.Filled.Add, contentDescription = "إضافة تذكير")
             }
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        if (uiState.reminders.isEmpty() && !uiState.isLoading) {
-            // حالة القائمة الفارغة
-            EmptyState(modifier = Modifier.padding(padding))
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(uiState.reminders, key = { it.id }) { reminder ->
-                    ReminderCard(
-                        reminder = reminder,
-                        onClick = { onItemClick(reminder) },
-                        onDelete = { viewModel.deleteReminder(reminder) }
-                    )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            // شريط حالة الأذونات (يظهر فقط عند وجود إعداد ناقص)
+            PermissionsBanner()
+
+            if (uiState.reminders.isEmpty() && !uiState.isLoading) {
+                EmptyState(modifier = Modifier.weight(1f))
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentPadding = PaddingValues(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(uiState.reminders, key = { it.id }) { reminder ->
+                        ReminderCard(
+                            reminder = reminder,
+                            onClick = { onItemClick(reminder) },
+                            onDelete = { pendingDelete = reminder }
+                        )
+                    }
                 }
             }
         }
@@ -328,6 +359,174 @@ fun MainScreen(
             onDismiss = { r -> viewModel.dismissMissed(r) }
         )
     }
+
+    // تأكيد الحذف + إتاحة التراجع عبر Snackbar
+    pendingDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDelete = null
+                    viewModel.deleteReminder(target)
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "تم حذف التذكير",
+                            actionLabel = "تراجع",
+                            withDismissAction = true
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.undoDelete(target)
+                        }
+                    }
+                }) { Text("حذف") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("إلغاء") }
+            },
+            title = { Text("حذف التذكير") },
+            text = { Text("هل تريد حذف هذا التذكير؟") }
+        )
+    }
+
+    // حوار رمز الدولة الافتراضي
+    if (showCountryDialog) {
+        CountryCodeDialog(
+            current = settingsPrefs.getDefaultCountryCode(),
+            onSave = { code ->
+                settingsPrefs.setDefaultCountryCode(code)
+                showCountryDialog = false
+                Toast.makeText(context, "تم حفظ رمز الدولة", Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { showCountryDialog = false }
+        )
+    }
+}
+
+/** شريط يظهر أعلى الرئيسية عند وجود إعداد أذونات ناقص، مع أزرار إصلاح سريعة */
+@Composable
+private fun PermissionsBanner() {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // إعادة الفحص عند العودة للتطبيق من الإعدادات
+    var tick by remember { mutableStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) tick++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val notifOk = remember(tick) {
+        NotificationManagerCompat.from(context).areNotificationsEnabled()
+    }
+    val overlayOk = remember(tick) { Settings.canDrawOverlays(context) }
+    val batteryOk = remember(tick) {
+        context.getSystemService(PowerManager::class.java)
+            .isIgnoringBatteryOptimizations(context.packageName)
+    }
+
+    if (notifOk && overlayOk && batteryOk) return
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                "لضمان عمل التذكيرات بدقة، فعّل:",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            if (!notifOk) {
+                BannerRow("الإشعارات") {
+                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    runCatching { context.startActivity(intent) }
+                }
+            }
+            if (!overlayOk) {
+                BannerRow("الفتح التلقائي (العرض فوق التطبيقات)") {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            )
+                        )
+                    }
+                }
+            }
+            if (!batteryOk) {
+                BannerRow("عدم تقييد البطارية") {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                Uri.parse("package:${context.packageName}")
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** صف داخل شريط الأذونات: نص + زر تفعيل */
+@Composable
+private fun BannerRow(label: String, onFix: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onErrorContainer
+        )
+        Button(onClick = onFix) { Text("تفعيل") }
+    }
+}
+
+/** حوار إدخال رمز الدولة الافتراضي */
+@Composable
+private fun CountryCodeDialog(
+    current: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var code by remember { mutableStateOf(current) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = { onSave(code) }) { Text("حفظ") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } },
+        title = { Text("رمز الدولة الافتراضي") },
+        text = {
+            Column {
+                Text(
+                    "يُضاف تلقائياً للأرقام المحلية (مثل 05...) لتُفتح في واتساب. " +
+                        "أدخل رمز دولتك بالأرقام فقط.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { v -> code = v.filter { it.isDigit() } },
+                    label = { Text("رمز الدولة") },
+                    placeholder = { Text("مثال: 966") },
+                    singleLine = true
+                )
+            }
+        }
+    )
 }
 
 /**
@@ -436,6 +635,7 @@ private fun PermissionRow(
 @Composable
 private fun OverflowMenu(
     onAutoOpen: () -> Unit,
+    onCountryCode: () -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
     onPickSound: () -> Unit
@@ -449,6 +649,11 @@ private fun OverflowMenu(
             text = { Text("تفعيل الفتح التلقائي") },
             leadingIcon = { Icon(Icons.Filled.Bolt, contentDescription = null) },
             onClick = { expanded = false; onAutoOpen() }
+        )
+        DropdownMenuItem(
+            text = { Text("رمز الدولة الافتراضي") },
+            leadingIcon = { Icon(Icons.Filled.Public, contentDescription = null) },
+            onClick = { expanded = false; onCountryCode() }
         )
         DropdownMenuItem(
             text = { Text("نغمة التنبيه") },

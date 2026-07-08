@@ -25,6 +25,18 @@ class SettingsPreferences(context: Context) {
         private const val KEY_SOUND_ENABLED = "sound_enabled"
         private const val KEY_OPEN_WHATSAPP_DIRECTLY = "open_whatsapp_directly"
         private const val KEY_ONBOARDED = "onboarded"
+        private const val KEY_COUNTRY_CODE = "country_code"
+        // رمز افتراضي (السعودية) — يمكن للمستخدم تغييره
+        private const val DEFAULT_COUNTRY_CODE = "966"
+    }
+
+    /** رمز الدولة الافتراضي (أرقام فقط، بلا +) يُضاف للأرقام المحلية */
+    fun getDefaultCountryCode(): String =
+        prefs.getString(KEY_COUNTRY_CODE, DEFAULT_COUNTRY_CODE) ?: DEFAULT_COUNTRY_CODE
+
+    fun setDefaultCountryCode(code: String) {
+        val digits = code.filter { it.isDigit() }
+        prefs.edit { putString(KEY_COUNTRY_CODE, digits.ifBlank { DEFAULT_COUNTRY_CODE }) }
     }
 
     /** هل عُرضت شاشة الترحيب/الأذونات من قبل؟ */

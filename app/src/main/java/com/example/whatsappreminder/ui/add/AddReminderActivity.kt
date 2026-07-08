@@ -80,9 +80,13 @@ class AddReminderActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // معرّف التذكير عند فتح الشاشة للتعديل (0 = إضافة جديدة)
+        val reminderId = intent.getLongExtra(
+            com.example.whatsappreminder.util.NotificationHelper.EXTRA_REMINDER_ID, 0L
+        )
         setContent {
             WhatsAppReminderTheme {
-                AddReminderScreen(onBack = { finish() })
+                AddReminderScreen(reminderId = reminderId, onBack = { finish() })
             }
         }
     }
@@ -92,10 +96,16 @@ class AddReminderActivity : ComponentActivity() {
 @Composable
 fun AddReminderScreen(
     onBack: () -> Unit,
+    reminderId: Long = 0L,
     viewModel: AddReminderViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // عند التعديل: تحميل بيانات التذكير الموجود
+    LaunchedEffect(reminderId) {
+        if (reminderId > 0L) viewModel.loadForEdit(reminderId)
+    }
 
     // صلاحية قراءة جهات الاتصال
     var hasContactsPermission by remember {
@@ -139,7 +149,7 @@ fun AddReminderScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("تذكير جديد") },
+                title = { Text(if (state.isEditing) "تعديل التذكير" else "تذكير جديد") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "رجوع")

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.whatsappreminder.domain.model.Reminder
 import com.example.whatsappreminder.domain.model.ReminderStatus
+import com.example.whatsappreminder.domain.usecase.AddReminderUseCase
 import com.example.whatsappreminder.domain.usecase.DeleteReminderUseCase
 import com.example.whatsappreminder.domain.usecase.ExportRemindersUseCase
 import com.example.whatsappreminder.domain.usecase.GetRemindersUseCase
@@ -39,7 +40,8 @@ class MainViewModel @Inject constructor(
     private val deleteReminderUseCase: DeleteReminderUseCase,
     private val exportRemindersUseCase: ExportRemindersUseCase,
     private val importRemindersUseCase: ImportRemindersUseCase,
-    private val updateReminderUseCase: UpdateReminderUseCase
+    private val updateReminderUseCase: UpdateReminderUseCase,
+    private val addReminderUseCase: AddReminderUseCase
 ) : ViewModel() {
 
     // تحويل تدفق التذكيرات إلى حالة واجهة قابلة للمراقبة
@@ -59,6 +61,13 @@ class MainViewModel @Inject constructor(
     fun deleteReminder(reminder: Reminder) {
         viewModelScope.launch {
             deleteReminderUseCase(reminder)
+        }
+    }
+
+    /** التراجع عن الحذف: إعادة إدراج التذكير وجدولته من جديد */
+    fun undoDelete(reminder: Reminder) {
+        viewModelScope.launch {
+            addReminderUseCase(reminder.copy(id = 0L))
         }
     }
 
