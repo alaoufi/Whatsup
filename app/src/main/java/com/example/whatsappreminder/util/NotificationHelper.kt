@@ -144,10 +144,16 @@ class NotificationHelper @Inject constructor(
             // عرض الرسالة كاملة عند توسيع الإشعار
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setCategory(if (openDirectly) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_REMINDER)
             .setVibrate(longArrayOf(0, 400, 200, 400))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+
+        // عند "يفتح واتساب مباشرة": إشعار ملء الشاشة يفتح واتساب تلقائياً
+        // (خاصة عند قفل الشاشة) دون حاجة لضغط الإشعار.
+        if (openDirectly) {
+            builder.setFullScreenIntent(pendingIntent, true)
+        }
 
         if (soundEnabled) builder.setSound(settings.getSoundUri()) else builder.setSilent(true)
 

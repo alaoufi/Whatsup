@@ -3,8 +3,10 @@ package com.example.whatsappreminder.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.provider.Settings
 import com.example.whatsappreminder.domain.model.ReminderStatus
 import com.example.whatsappreminder.domain.repository.ReminderRepository
+import com.example.whatsappreminder.ui.open.OpenWhatsAppActivity
 import com.example.whatsappreminder.util.NotificationHelper
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -58,6 +60,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                     notificationHelper.showExpiredNotification(reminderId, title)
                 } else {
                     // الحالة الطبيعية: إشعار في الوقت المحدّد بإعدادات هذا التذكير
+                    // (إشعار ملء الشاشة يفتح واتساب تلقائياً عند القفل)
                     notificationHelper.showReminderNotification(
                         reminderId = reminderId,
                         contactName = title,
@@ -67,6 +70,18 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                         openDirectly = reminder.openWhatsAppDirectly
                     )
                     repository.updateStatus(reminderId, ReminderStatus.NOTIFIED, notifiedAt = now)
+
+                    // فتح تلقائي فوري لواتساب دون ضغط الإشعار — يتطلب صلاحية
+                    // "العرض فوق التطبيقات الأخرى" للسماح بالتشغيل من الخلفية.
+                    if (reminder.openWhatsAppDirectly && Settings.canDrawOverlays(context)) {
+                        val openIntent = Intent(context, OpenWhatsAppActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            putExtra(NotificationHelper.EXTRA_REMINDER_ID, reminderId)
+                            putExtra(NotificationHelper.EXTRA_PHONE, reminder.phoneNumber)
+                            putExtra(NotificationHelper.EXTRA_MESSAGE, reminder.message)
+                        }
+                        runCatching { context.startActivity(openIntent) }
+                    }
                 }
             } finally {
                 pending.finish()

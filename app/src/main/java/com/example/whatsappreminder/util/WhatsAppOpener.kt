@@ -8,46 +8,59 @@ import com.example.whatsappreminder.R
 import java.net.URLEncoder
 
 /**
- * أداة فتح واتساب عبر رابط رسمي (wa.me deep link) فقط.
+ * أداة فتح واتساب على محادثة رقم معيّن مع نص الرسالة جاهزاً.
  *
- * ⚠️ ملاحظة أمنية مهمة:
- * هذا التطبيق "تذكير" فقط. لا يوجد أي أتمتة ولا AccessibilityService.
- * المستخدم هو من يضغط زر الإرسال داخل واتساب بنفسه.
- * نكتفي بفتح واتساب على المحادثة الصحيحة مع نص الرسالة مُعبّأ مسبقاً.
+ * ⚠️ ملاحظة أمنية:
+ * التطبيق يفتح واتساب فقط عبر Intent رسمي — لا إرسال تلقائي ولا AccessibilityService.
+ * المستخدم يضغط زر الإرسال داخل واتساب بنفسه.
  */
 object WhatsAppOpener {
 
+    // حزم واتساب المعروفة (العادي ثم الأعمال)
+    private val WHATSAPP_PACKAGES = listOf("com.whatsapp", "com.whatsapp.w4b")
+
     /**
-     * فتح واتساب على محادثة الرقم المحدّد مع نص الرسالة.
+     * فتح محادثة واتساب على الرقم المحدّد مع نص الرسالة.
+     * نُجبر النية على حزمة واتساب مباشرة حتى تُفتح داخل التطبيق لا في المتصفح.
      *
-     * @param phoneNumber رقم الهاتف مع رمز الدولة (تُزال منه الرموز غير الرقمية)
-     * @param message نص الرسالة (يُرمّز URL-encoding)
-     * @return true إذا نجح فتح واتساب، false إذا لم يُعثر على تطبيق مناسب
+     * @return true إذا نجح فتح واتساب
      */
     fun openChat(context: Context, phoneNumber: String, message: String): Boolean {
-        // تنظيف الرقم: إبقاء الأرقام فقط (إزالة +، مسافات، شرطات...)
-        val sanitizedNumber = phoneNumber.filter { it.isDigit() }
-        // ترميز الرسالة لتكون صالحة داخل عنوان URL
-        val encodedMessage = URLEncoder.encode(message, "UTF-8")
+        val number = phoneNumber.filter { it.isDigit() }
+        val text = URLEncoder.encode(message, "UTF-8")
+        val url = "https://api.whatsapp.com/send?phone=$number&text=$text"
 
-        // 1) المحاولة الأولى: مخطط whatsapp:// يفتح واتساب مباشرة دون الحاجة لمتصفح
-        val directUri = Uri.parse("whatsapp://send?phone=$sanitizedNumber&text=$encodedMessage")
-        val directIntent = Intent(Intent.ACTION_VIEW, directUri).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        // 1) محاولة الفتح داخل واتساب مباشرة بتحديد الحزمة
+        for (pkg in WHATSAPP_PACKAGES) {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                setPackage(pkg)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            try {
+                context.startActivity(intent)
+                return true
+            } catch (_: Exception) {
+                // هذه الحزمة غير مثبّتة — نجرّب التالية
+            }
         }
+
+        // 2) محاولة عبر مخطط whatsapp:// دون تحديد حزمة
         try {
-            context.startActivity(directIntent)
+            val schemeIntent = Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("whatsapp://send?phone=$number&text=$text")
+            ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+            context.startActivity(schemeIntent)
             return true
         } catch (_: Exception) {
-            // لا يوجد واتساب يستجيب لهذا المخطط — نجرّب الطريقة الاحتياطية
         }
 
-        // 2) الطريقة الاحتياطية: رابط wa.me الرسمي (قد يمرّ عبر المتصفح)
-        val webUri = Uri.parse("https://wa.me/$sanitizedNumber?text=$encodedMessage")
-        val webIntent = Intent(Intent.ACTION_VIEW, webUri).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
+        // 3) الطريقة الاحتياطية الأخيرة: رابط wa.me (قد يمرّ عبر المتصفح)
         return try {
+            val webIntent = Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://wa.me/$number?text=$text")
+            ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
             context.startActivity(webIntent)
             true
         } catch (e: Exception) {

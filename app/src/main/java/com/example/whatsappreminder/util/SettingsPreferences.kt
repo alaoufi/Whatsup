@@ -24,6 +24,14 @@ class SettingsPreferences(context: Context) {
         private const val KEY_CHANNEL_VERSION = "channel_version"
         private const val KEY_SOUND_ENABLED = "sound_enabled"
         private const val KEY_OPEN_WHATSAPP_DIRECTLY = "open_whatsapp_directly"
+        private const val KEY_ONBOARDED = "onboarded"
+    }
+
+    /** هل عُرضت شاشة الترحيب/الأذونات من قبل؟ */
+    fun isOnboardingDone(): Boolean = prefs.getBoolean(KEY_ONBOARDED, false)
+
+    fun setOnboardingDone() {
+        prefs.edit { putBoolean(KEY_ONBOARDED, true) }
     }
 
     /** نغمة التنبيه المختارة، أو نغمة الإشعار الافتراضية للنظام إن لم يُختَر شيء */

@@ -17,6 +17,13 @@
     <!-- قراءة جهات الاتصال للبحث عن الأرقام واختيارها -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
+    <!-- لفتح واتساب تلقائياً في الموعد من الخلفية (العرض فوق التطبيقات الأخرى) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- لإطلاق إشعار ملء الشاشة الذي يفتح واتساب عند القفل -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- لطلب استثناء التطبيق من تحسينات البطارية (لضمان دقة المواعيد) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- للتحقق من تثبيت واتساب عند الحاجة (اختياري) -->
     <queries>
         <package android:name="com.whatsapp" />

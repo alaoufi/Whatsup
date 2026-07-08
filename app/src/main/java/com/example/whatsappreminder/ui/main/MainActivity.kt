@@ -1,11 +1,13 @@
 package com.example.whatsappreminder.ui.main
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -30,9 +32,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.outlined.EventNote
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -44,6 +49,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -68,6 +74,7 @@ import com.example.whatsappreminder.ui.theme.WhatsAppReminderTheme
 import com.example.whatsappreminder.ui.toVisual
 import com.example.whatsappreminder.util.DateFormatter
 import com.example.whatsappreminder.util.NotificationHelper
+import com.example.whatsappreminder.util.SettingsPreferences
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -78,9 +85,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // طلب صلاحية الإشعارات على Android 13+ عند أول تشغيل
-        requestNotificationPermissionIfNeeded()
 
         setContent {
             WhatsAppReminderTheme {
@@ -95,22 +99,6 @@ class MainActivity : ComponentActivity() {
                         startActivity(intent)
                     }
                 )
-            }
-        }
-    }
-
-    // مُسجّل طلب صلاحية الإشعارات
-    private val notificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* لا إجراء إضافي */ }
-
-    private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val granted = ContextCompat.checkSelfPermission(
-                this,
-                android.Manifest.permission.POST_NOTIFICATIONS
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (!granted) {
-                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }
@@ -129,6 +117,13 @@ fun MainScreen(
 
     // نص التصدير المؤقت بانتظار اختيار المستخدم لمكان الحفظ
     var pendingExport by remember { mutableStateOf<String?>(null) }
+
+    // شاشة الترحيب/الأذونات عند أول تشغيل
+    val settingsPrefs = remember { SettingsPreferences(context) }
+    var showOnboarding by remember { mutableStateOf(!settingsPrefs.isOnboardingDone()) }
+    val runtimePermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { /* استلمنا إجابة المستخدم */ }
 
     // مُطلق حفظ ملف النسخة الاحتياطية
     val createDocLauncher = rememberLauncherForActivityResult(
@@ -195,6 +190,24 @@ fun MainScreen(
                 title = { Text("تذكيرات واتساب") },
                 actions = {
                     OverflowMenu(
+                        onAutoOpen = {
+                            if (Settings.canDrawOverlays(context)) {
+                                Toast.makeText(
+                                    context, "الفتح التلقائي مُفعّل بالفعل", Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "فعّل «العرض فوق التطبيقات الأخرى» لهذا التطبيق",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}")
+                                )
+                                runCatching { context.startActivity(intent) }
+                            }
+                        },
                         onExport = { viewModel.requestExport() },
                         onImport = { openDocLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
                         onPickSound = {
@@ -250,11 +263,119 @@ fun MainScreen(
             }
         }
     }
+
+    // شاشة الترحيب لطلب كل الأذونات عند أول تشغيل
+    if (showOnboarding) {
+        OnboardingDialog(
+            onGrantRuntime = {
+                val perms = buildList {
+                    add(Manifest.permission.READ_CONTACTS)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        add(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }.toTypedArray()
+                runtimePermLauncher.launch(perms)
+            },
+            onOpenOverlay = {
+                if (!Settings.canDrawOverlays(context)) {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            )
+                        )
+                    }
+                } else {
+                    Toast.makeText(context, "مُفعّل بالفعل", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onOpenBattery = {
+                runCatching {
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                            Uri.parse("package:${context.packageName}")
+                        )
+                    )
+                }
+            },
+            onDone = {
+                settingsPrefs.setOnboardingDone()
+                showOnboarding = false
+            }
+        )
+    }
+}
+
+/** شاشة ترحيب تطلب كل الأذونات المطلوبة عند أول تشغيل */
+@Composable
+private fun OnboardingDialog(
+    onGrantRuntime: () -> Unit,
+    onOpenOverlay: () -> Unit,
+    onOpenBattery: () -> Unit,
+    onDone: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { /* لا يُغلق إلا بزر تم */ },
+        confirmButton = {
+            TextButton(onClick = onDone) { Text("تم") }
+        },
+        title = { Text("الأذونات المطلوبة") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "لكي يعمل التطبيق بدقة، امنح الأذونات التالية بالترتيب:",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                PermissionRow(
+                    title = "الإشعارات وجهات الاتصال",
+                    desc = "لعرض التذكير والبحث عن الأرقام",
+                    button = "منح",
+                    onClick = onGrantRuntime
+                )
+                PermissionRow(
+                    title = "الفتح التلقائي لواتساب",
+                    desc = "العرض فوق التطبيقات الأخرى",
+                    button = "فتح الإعدادات",
+                    onClick = onOpenOverlay
+                )
+                PermissionRow(
+                    title = "عدم تقييد البطارية",
+                    desc = "لضمان دقة المواعيد على هواوي",
+                    button = "فتح الإعدادات",
+                    onClick = onOpenBattery
+                )
+            }
+        }
+    )
+}
+
+/** صف إذن داخل شاشة الترحيب */
+@Composable
+private fun PermissionRow(
+    title: String,
+    desc: String,
+    button: String,
+    onClick: () -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                desc,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Button(onClick = onClick) { Text(button) }
+    }
 }
 
 /** قائمة منسدلة (⋮) للنغمة والتصدير والاستيراد */
 @Composable
 private fun OverflowMenu(
+    onAutoOpen: () -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
     onPickSound: () -> Unit
@@ -264,6 +385,11 @@ private fun OverflowMenu(
         Icon(Icons.Filled.MoreVert, contentDescription = "خيارات")
     }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text("تفعيل الفتح التلقائي") },
+            leadingIcon = { Icon(Icons.Filled.Bolt, contentDescription = null) },
+            onClick = { expanded = false; onAutoOpen() }
+        )
         DropdownMenuItem(
             text = { Text("نغمة التنبيه") },
             leadingIcon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
