@@ -58,6 +58,7 @@ import com.example.whatsappreminder.ui.toVisual
 import com.example.whatsappreminder.util.DateFormatter
 import com.example.whatsappreminder.util.NotificationHelper
 import com.example.whatsappreminder.util.WhatsAppOpener
+import com.example.whatsappreminder.util.composeMessage
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.Calendar
 
@@ -142,7 +143,7 @@ fun ReminderDetailScreen(
                     WhatsAppOpener.openChat(
                         context = context,
                         phoneNumber = reminder.phoneNumber,
-                        message = reminder.message
+                        message = reminder.composeMessage()
                     )
                 },
                 onEdit = {

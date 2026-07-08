@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [ReminderEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,6 +29,18 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL(
                     "ALTER TABLE reminders ADD COLUMN open_whatsapp_directly INTEGER NOT NULL DEFAULT 1"
+                )
+            }
+        }
+
+        /** ترحيل من 2 إلى 3: إضافة عمودَي التكرار والتصنيف */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE reminders ADD COLUMN recurrence TEXT NOT NULL DEFAULT 'NONE'"
+                )
+                db.execSQL(
+                    "ALTER TABLE reminders ADD COLUMN category TEXT NOT NULL DEFAULT ''"
                 )
             }
         }

@@ -2,6 +2,7 @@ package com.example.whatsappreminder.ui.add
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.whatsappreminder.domain.model.RecurrenceType
 import com.example.whatsappreminder.domain.model.Reminder
 import com.example.whatsappreminder.domain.model.ReminderStatus
 import com.example.whatsappreminder.domain.usecase.AddReminderUseCase
@@ -25,6 +26,8 @@ data class AddReminderUiState(
     val scheduledTime: Long? = null,
     val soundEnabled: Boolean = true,
     val openWhatsAppDirectly: Boolean = true,
+    val recurrence: RecurrenceType = RecurrenceType.NONE,
+    val category: String = "",
     val contactNameError: String? = null,
     val phoneError: String? = null,
     val messageError: String? = null,
@@ -70,6 +73,8 @@ class AddReminderViewModel @Inject constructor(
                     scheduledTime = reminder.scheduledTime,
                     soundEnabled = reminder.soundEnabled,
                     openWhatsAppDirectly = reminder.openWhatsAppDirectly,
+                    recurrence = reminder.recurrence,
+                    category = reminder.category,
                     isEditing = true
                 )
             }
@@ -96,6 +101,12 @@ class AddReminderViewModel @Inject constructor(
 
     fun onOpenDirectlyChange(value: Boolean) =
         _uiState.update { it.copy(openWhatsAppDirectly = value) }
+
+    fun onRecurrenceChange(value: RecurrenceType) =
+        _uiState.update { it.copy(recurrence = value) }
+
+    fun onCategoryChange(value: String) =
+        _uiState.update { it.copy(category = value) }
 
     /**
      * التحقق من صحة المدخلات ثم حفظ التذكير.
@@ -151,7 +162,9 @@ class AddReminderViewModel @Inject constructor(
                 createdAt = if (editingId > 0L) originalCreatedAt else System.currentTimeMillis(),
                 notes = state.notes.trim(),
                 soundEnabled = state.soundEnabled,
-                openWhatsAppDirectly = state.openWhatsAppDirectly
+                openWhatsAppDirectly = state.openWhatsAppDirectly,
+                recurrence = state.recurrence,
+                category = state.category
             )
             if (editingId > 0L) {
                 // تحديث: يعيد الجدولة بالوقت الجديد لأن الحالة SCHEDULED

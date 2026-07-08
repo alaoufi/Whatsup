@@ -31,7 +31,7 @@ object AppModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             // شبكة أمان: في حال أي فرق مخطط غير متوقع أثناء التطوير
             .fallbackToDestructiveMigration()
             .build()

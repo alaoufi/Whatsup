@@ -7,6 +7,7 @@ import com.example.whatsappreminder.domain.model.ReminderStatus
 import com.example.whatsappreminder.domain.repository.ReminderRepository
 import com.example.whatsappreminder.util.NotificationHelper
 import com.example.whatsappreminder.util.ReminderScheduler
+import com.example.whatsappreminder.util.composeMessage
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,7 +66,7 @@ class BootReceiver : BroadcastReceiver() {
                             reminderId = reminder.id,
                             contactName = title,
                             phoneNumber = reminder.phoneNumber,
-                            message = reminder.message,
+                            message = reminder.composeMessage(),
                             soundEnabled = reminder.soundEnabled
                         )
                         repository.updateStatus(

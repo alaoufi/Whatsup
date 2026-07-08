@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.example.whatsappreminder.R
+import com.example.whatsappreminder.receiver.ReminderActionReceiver
 import com.example.whatsappreminder.ui.detail.ReminderDetailActivity
 import com.example.whatsappreminder.ui.open.OpenWhatsAppActivity
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -156,6 +157,39 @@ class NotificationHelper @Inject constructor(
         }
 
         if (soundEnabled) builder.setSound(settings.getSoundUri()) else builder.setSilent(true)
+
+        // زر "فتح واتساب" (يفتح المحادثة مباشرة)
+        val openIntent = Intent(context, OpenWhatsAppActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_REMINDER_ID, reminderId)
+            putExtra(EXTRA_PHONE, phoneNumber)
+            putExtra(EXTRA_MESSAGE, message)
+        }
+        val openPi = PendingIntent.getActivity(
+            context, (reminderId * 10 + 3).toInt(), openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        // زر "تأجيل ساعة"
+        val snoozePi = PendingIntent.getBroadcast(
+            context, (reminderId * 10 + 1).toInt(),
+            Intent(context, ReminderActionReceiver::class.java).apply {
+                action = ReminderActionReceiver.ACTION_SNOOZE
+                putExtra(ReminderActionReceiver.EXTRA_ID, reminderId)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        // زر "تم"
+        val donePi = PendingIntent.getBroadcast(
+            context, (reminderId * 10 + 2).toInt(),
+            Intent(context, ReminderActionReceiver::class.java).apply {
+                action = ReminderActionReceiver.ACTION_DONE
+                putExtra(ReminderActionReceiver.EXTRA_ID, reminderId)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        builder.addAction(R.drawable.ic_notification, "فتح واتساب", openPi)
+        builder.addAction(R.drawable.ic_notification, "تأجيل ساعة", snoozePi)
+        builder.addAction(R.drawable.ic_notification, "تم", donePi)
 
         // التحقق من صلاحية الإشعارات قبل العرض لتجنّب استثناء الأمان
         if (hasNotificationPermission()) {

@@ -99,6 +99,12 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- مستقبِل أزرار الإشعار (تأجيل/تم) -->
+        <receiver
+            android:name=".receiver.ReminderActionReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
         <!-- تعطيل التهيئة الافتراضية لـ WorkManager لأننا نستخدم Hilt (Configuration.Provider) -->
         <provider
             android:name="androidx.startup.InitializationProvider"

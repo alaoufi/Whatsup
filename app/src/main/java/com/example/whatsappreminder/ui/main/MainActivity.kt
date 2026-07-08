@@ -27,10 +27,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -41,7 +46,9 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -51,6 +58,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -97,6 +106,7 @@ import com.example.whatsappreminder.util.DateFormatter
 import com.example.whatsappreminder.util.NotificationHelper
 import com.example.whatsappreminder.util.SettingsPreferences
 import com.example.whatsappreminder.util.WhatsAppOpener
+import com.example.whatsappreminder.util.composeMessage
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -147,6 +157,9 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     // التذكير المُنتظر تأكيد حذفه
     var pendingDelete by remember { mutableStateOf<Reminder?>(null) }
+    // البحث وفلترة التصنيف
+    var searchQuery by remember { mutableStateOf("") }
+    var categoryFilter by remember { mutableStateOf("") }
     // إظهار حوار رمز الدولة / حول التطبيق
     var showCountryDialog by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
@@ -289,13 +302,36 @@ fun MainScreen(
             if (uiState.reminders.isEmpty() && !uiState.isLoading) {
                 EmptyState(modifier = Modifier.weight(1f))
             } else {
-                // تجميع: قادمة (نشطة) ومنتهية
-                val active = uiState.reminders.filter {
+                // حقل البحث
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    placeholder = { Text("ابحث في التذكيرات") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+                // شرائح فلترة التصنيف
+                CategoryFilterRow(selected = categoryFilter, onSelect = { categoryFilter = it })
+
+                // تطبيق البحث والفلترة
+                val filtered = uiState.reminders.filter { r ->
+                    val q = searchQuery.trim()
+                    val matchesQuery = q.isBlank() ||
+                        r.contactName.contains(q, ignoreCase = true) ||
+                        r.phoneNumber.contains(q) ||
+                        r.message.contains(q, ignoreCase = true)
+                    val matchesCategory = categoryFilter.isBlank() || r.category == categoryFilter
+                    matchesQuery && matchesCategory
+                }
+                val active = filtered.filter {
                     it.status == ReminderStatus.SCHEDULED ||
                         it.status == ReminderStatus.PENDING_NETWORK ||
                         it.status == ReminderStatus.NOTIFIED
                 }
-                val done = uiState.reminders.filter {
+                val done = filtered.filter {
                     it.status == ReminderStatus.OPENED ||
                         it.status == ReminderStatus.CANCELLED ||
                         it.status == ReminderStatus.EXPIRED
@@ -307,6 +343,16 @@ fun MainScreen(
                     contentPadding = PaddingValues(12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    if (filtered.isEmpty()) {
+                        item {
+                            Text(
+                                "لا نتائج مطابقة",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(24.dp)
+                            )
+                        }
+                    }
                     if (active.isNotEmpty()) {
                         item(key = "h_active") { SectionHeader("قادمة (${active.size})") }
                         items(active, key = { it.id }) { reminder ->
@@ -390,7 +436,7 @@ fun MainScreen(
         MissedReminderDialog(
             reminder = missed.first(),
             onSend = { r ->
-                WhatsAppOpener.openChat(context, r.phoneNumber, r.message)
+                WhatsAppOpener.openChat(context, r.phoneNumber, r.composeMessage())
                 viewModel.markOpened(r)
             },
             onDismiss = { r -> viewModel.dismissMissed(r) }
@@ -753,6 +799,42 @@ private fun OverflowMenu(
     }
 }
 
+/** صف شرائح فلترة التصنيف (أفقي قابل للتمرير) */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategoryFilterRow(selected: String, onSelect: (String) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = selected.isBlank(),
+            onClick = { onSelect("") },
+            label = { Text("الكل") }
+        )
+        com.example.whatsappreminder.ui.Categories.ALL
+            .filter { it.name.isNotBlank() }
+            .forEach { cat ->
+                FilterChip(
+                    selected = selected == cat.name,
+                    onClick = { onSelect(cat.name) },
+                    label = { Text(cat.name) },
+                    leadingIcon = {
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .clip(CircleShape)
+                                .background(cat.color)
+                        )
+                    }
+                )
+            }
+    }
+}
+
 /** عنوان قسم داخل القائمة */
 @Composable
 private fun SectionHeader(text: String) {
@@ -815,6 +897,16 @@ private fun ReminderCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // نقطة لون التصنيف (إن وُجد)
+                    com.example.whatsappreminder.ui.Categories.colorFor(reminder.category)?.let { c ->
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(c)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
                     Text(
                         text = reminder.contactName.ifBlank { reminder.phoneNumber },
                         style = MaterialTheme.typography.titleMedium,
@@ -848,6 +940,21 @@ private fun ReminderCard(
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold
                     )
+                    if (reminder.recurrence != com.example.whatsappreminder.domain.model.RecurrenceType.NONE) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Filled.Repeat,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            text = com.example.whatsappreminder.util.Recurrence.label(reminder.recurrence),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
             IconButton(onClick = onDelete) {

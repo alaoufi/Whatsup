@@ -4,10 +4,14 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import com.example.whatsappreminder.domain.model.RecurrenceType
 import com.example.whatsappreminder.domain.model.ReminderStatus
 import com.example.whatsappreminder.domain.repository.ReminderRepository
 import com.example.whatsappreminder.ui.open.OpenWhatsAppActivity
 import com.example.whatsappreminder.util.NotificationHelper
+import com.example.whatsappreminder.util.Recurrence
+import com.example.whatsappreminder.util.ReminderScheduler
+import com.example.whatsappreminder.util.composeMessage
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +31,9 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
 
     @Inject
     lateinit var notificationHelper: NotificationHelper
+
+    @Inject
+    lateinit var scheduler: ReminderScheduler
 
     companion object {
         const val ACTION_FIRE = "com.example.whatsappreminder.ALARM_FIRE_"
@@ -52,10 +59,14 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
 
                 // عنوان الإشعار: الاسم إن وُجد، وإلا الرقم
                 val title = reminder.contactName.ifBlank { reminder.phoneNumber }
+                // نص الرسالة بعد استبدال المتغيّرات ({الاسم}/{التاريخ})
+                val composed = reminder.composeMessage()
                 val now = System.currentTimeMillis()
 
-                if (now - reminder.scheduledTime > EXPIRY_THRESHOLD_MILLIS) {
-                    // فات الموعد بأكثر من 24 ساعة
+                if (reminder.recurrence == RecurrenceType.NONE &&
+                    now - reminder.scheduledTime > EXPIRY_THRESHOLD_MILLIS
+                ) {
+                    // فات الموعد بأكثر من 24 ساعة (لغير المتكرر)
                     repository.updateStatus(reminderId, ReminderStatus.EXPIRED)
                     notificationHelper.showExpiredNotification(reminderId, title)
                 } else {
@@ -65,11 +76,24 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                         reminderId = reminderId,
                         contactName = title,
                         phoneNumber = reminder.phoneNumber,
-                        message = reminder.message,
+                        message = composed,
                         soundEnabled = reminder.soundEnabled,
                         openDirectly = reminder.openWhatsAppDirectly
                     )
-                    repository.updateStatus(reminderId, ReminderStatus.NOTIFIED, notifiedAt = now)
+
+                    if (reminder.recurrence != RecurrenceType.NONE) {
+                        // متكرر: جدولة الموعد التالي وإبقاء الحالة SCHEDULED
+                        val next = Recurrence.next(reminder.scheduledTime, reminder.recurrence, now)
+                        val nextReminder = reminder.copy(
+                            scheduledTime = next,
+                            status = ReminderStatus.SCHEDULED,
+                            notifiedAt = now
+                        )
+                        repository.updateReminder(nextReminder)
+                        scheduler.schedule(nextReminder)
+                    } else {
+                        repository.updateStatus(reminderId, ReminderStatus.NOTIFIED, notifiedAt = now)
+                    }
 
                     // فتح تلقائي فوري لواتساب دون ضغط الإشعار — يتطلب صلاحية
                     // "العرض فوق التطبيقات الأخرى" للسماح بالتشغيل من الخلفية.
@@ -78,7 +102,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                             putExtra(NotificationHelper.EXTRA_REMINDER_ID, reminderId)
                             putExtra(NotificationHelper.EXTRA_PHONE, reminder.phoneNumber)
-                            putExtra(NotificationHelper.EXTRA_MESSAGE, reminder.message)
+                            putExtra(NotificationHelper.EXTRA_MESSAGE, composed)
                         }
                         runCatching { context.startActivity(openIntent) }
                     }

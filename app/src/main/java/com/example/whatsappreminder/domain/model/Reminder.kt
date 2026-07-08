@@ -27,8 +27,18 @@ data class Reminder(
     val notifiedAt: Long? = null,
     val notes: String = "",
     val soundEnabled: Boolean = true,
-    val openWhatsAppDirectly: Boolean = true
+    val openWhatsAppDirectly: Boolean = true,
+    val recurrence: RecurrenceType = RecurrenceType.NONE,
+    val category: String = ""
 )
+
+/** نوع تكرار التذكير */
+enum class RecurrenceType {
+    NONE,     // مرة واحدة
+    DAILY,    // يومي
+    WEEKLY,   // أسبوعي
+    MONTHLY   // شهري
+}
 
 /**
  * حالات التذكير المختلفة.

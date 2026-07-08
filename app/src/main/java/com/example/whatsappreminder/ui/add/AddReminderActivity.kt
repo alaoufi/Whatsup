@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +33,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -63,10 +65,14 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.whatsappreminder.domain.model.RecurrenceType
+import com.example.whatsappreminder.ui.Categories
 import com.example.whatsappreminder.ui.theme.WhatsAppReminderTheme
 import com.example.whatsappreminder.util.ContactResult
 import com.example.whatsappreminder.util.ContactsSearch
 import com.example.whatsappreminder.util.DateFormatter
+import com.example.whatsappreminder.util.MessageTemplates
+import com.example.whatsappreminder.util.Recurrence
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.Calendar
 import java.util.TimeZone
@@ -248,6 +254,9 @@ fun AddReminderScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // زر القوالب الجاهزة
+            TemplatesButton(onPick = { body -> viewModel.onMessageChange(body) })
+
             // نص الرسالة (العدّاد داخل العنوان لتوفير الارتفاع)
             OutlinedTextField(
                 value = state.message,
@@ -281,6 +290,29 @@ fun AddReminderScreen(
                     text = it,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            // التكرار والتصنيف
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val recurrences = RecurrenceType.values().toList()
+                LabeledDropdown(
+                    label = "التكرار",
+                    options = recurrences.map { Recurrence.label(it) },
+                    selectedIndex = recurrences.indexOf(state.recurrence),
+                    onSelected = { viewModel.onRecurrenceChange(recurrences[it]) },
+                    modifier = Modifier.weight(1f)
+                )
+                val categories = Categories.ALL.map { it.name }
+                LabeledDropdown(
+                    label = "التصنيف",
+                    options = categories.map { it.ifBlank { "بلا تصنيف" } },
+                    selectedIndex = categories.indexOf(state.category).coerceAtLeast(0),
+                    onSelected = { viewModel.onCategoryChange(categories[it]) },
+                    modifier = Modifier.weight(1f)
                 )
             }
 
@@ -357,6 +389,40 @@ fun AddReminderScreen(
                 showTimePicker = false
             }
         )
+    }
+}
+
+/** زر يفتح قائمة القوالب الجاهزة */
+@Composable
+private fun TemplatesButton(onPick: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("قوالب رسائل جاهزة", fontWeight = FontWeight.Bold)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            MessageTemplates.ALL.forEach { template ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(template.title, fontWeight = FontWeight.Bold)
+                            Text(
+                                template.body,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        onPick(template.body)
+                    }
+                )
+            }
+        }
     }
 }
 

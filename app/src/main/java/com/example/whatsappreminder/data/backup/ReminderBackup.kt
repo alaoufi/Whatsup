@@ -1,6 +1,7 @@
 package com.example.whatsappreminder.data.backup
 
 import com.example.whatsappreminder.domain.model.Reminder
+import com.example.whatsappreminder.domain.model.RecurrenceType
 import com.example.whatsappreminder.domain.model.ReminderStatus
 import org.json.JSONArray
 import org.json.JSONObject
@@ -32,6 +33,8 @@ object ReminderBackup {
                 put("notes", r.notes)
                 put("soundEnabled", r.soundEnabled)
                 put("openWhatsAppDirectly", r.openWhatsAppDirectly)
+                put("recurrence", r.recurrence.name)
+                put("category", r.category)
             }
             array.put(obj)
         }
@@ -68,7 +71,11 @@ object ReminderBackup {
                     notifiedAt = if (obj.isNull("notifiedAt")) null else obj.optLong("notifiedAt"),
                     notes = obj.optString("notes", ""),
                     soundEnabled = obj.optBoolean("soundEnabled", true),
-                    openWhatsAppDirectly = obj.optBoolean("openWhatsAppDirectly", true)
+                    openWhatsAppDirectly = obj.optBoolean("openWhatsAppDirectly", true),
+                    recurrence = runCatching {
+                        RecurrenceType.valueOf(obj.optString("recurrence", "NONE"))
+                    }.getOrDefault(RecurrenceType.NONE),
+                    category = obj.optString("category", "")
                 )
             )
         }

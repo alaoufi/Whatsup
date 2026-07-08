@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.whatsappreminder.domain.model.Reminder
+import com.example.whatsappreminder.domain.model.RecurrenceType
 import com.example.whatsappreminder.domain.model.ReminderStatus
 
 /**
@@ -43,7 +44,13 @@ data class ReminderEntity(
     val soundEnabled: Boolean = true,
 
     @ColumnInfo(name = "open_whatsapp_directly", defaultValue = "1")
-    val openWhatsAppDirectly: Boolean = true
+    val openWhatsAppDirectly: Boolean = true,
+
+    @ColumnInfo(name = "recurrence", defaultValue = "NONE")
+    val recurrence: String = "NONE",
+
+    @ColumnInfo(name = "category", defaultValue = "")
+    val category: String = ""
 )
 
 /**
@@ -62,7 +69,10 @@ fun ReminderEntity.toDomain(): Reminder = Reminder(
     notifiedAt = notifiedAt,
     notes = notes,
     soundEnabled = soundEnabled,
-    openWhatsAppDirectly = openWhatsAppDirectly
+    openWhatsAppDirectly = openWhatsAppDirectly,
+    recurrence = runCatching { RecurrenceType.valueOf(recurrence) }
+        .getOrDefault(RecurrenceType.NONE),
+    category = category
 )
 
 /**
@@ -79,5 +89,7 @@ fun Reminder.toEntity(): ReminderEntity = ReminderEntity(
     notifiedAt = notifiedAt,
     notes = notes,
     soundEnabled = soundEnabled,
-    openWhatsAppDirectly = openWhatsAppDirectly
+    openWhatsAppDirectly = openWhatsAppDirectly,
+    recurrence = recurrence.name,
+    category = category
 )
