@@ -25,6 +25,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -73,6 +75,7 @@ import com.example.whatsappreminder.util.ContactsSearch
 import com.example.whatsappreminder.util.DateFormatter
 import com.example.whatsappreminder.util.MessageTemplates
 import com.example.whatsappreminder.util.Recurrence
+import com.example.whatsappreminder.util.TemplateStore
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.Calendar
 import java.util.TimeZone
@@ -139,6 +142,10 @@ fun AddReminderScreen(
     var showTimePicker by remember { mutableStateOf(false) }
     var pickedDateMillis by remember { mutableStateOf<Long?>(null) }
 
+    // قوالب الرسائل (قابلة للتعديل) وإدارتها
+    var templates by remember { mutableStateOf(TemplateStore.load(context)) }
+    var showManageTemplates by remember { mutableStateOf(false) }
+
     LaunchedEffect(query, hasContactsPermission) {
         results = if (hasContactsPermission && query.isNotBlank()) {
             ContactsSearch.search(context, query)
@@ -176,12 +183,10 @@ fun AddReminderScreen(
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
                 .imePadding(), // يمنع اختفاء الحقول تحت لوحة المفاتيح
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // نمط موحّد: نص غامق داخل الحقول
-            val fieldText = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
-
-            Spacer(Modifier.height(2.dp))
+            // نمط موحّد: نص غامق ومضغوط داخل الحقول
+            val fieldText = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
 
             // البحث في جهات الاتصال (اسم أو رقم)
             OutlinedTextField(
@@ -254,9 +259,6 @@ fun AddReminderScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // زر القوالب الجاهزة
-            TemplatesButton(onPick = { body -> viewModel.onMessageChange(body) })
-
             // نص الرسالة (العدّاد داخل العنوان لتوفير الارتفاع)
             OutlinedTextField(
                 value = state.message,
@@ -268,8 +270,15 @@ fun AddReminderScreen(
                 supportingText = state.messageError?.let { { Text(it) } },
                 textStyle = fieldText,
                 minLines = 2,
-                maxLines = 4,
+                maxLines = 3,
                 modifier = Modifier.fillMaxWidth()
+            )
+
+            // زر القوالب الجاهزة (مضغوط) مع إمكانية الإدارة
+            TemplatesButton(
+                templates = templates,
+                onPick = { body -> viewModel.onMessageChange(body) },
+                onManage = { showManageTemplates = true }
             )
 
             // اختيار التاريخ والوقت
@@ -390,21 +399,36 @@ fun AddReminderScreen(
             }
         )
     }
+
+    // حوار إدارة القوالب
+    if (showManageTemplates) {
+        ManageTemplatesDialog(
+            initial = templates,
+            onSave = { list ->
+                TemplateStore.save(context, list)
+                templates = list
+                showManageTemplates = false
+                Toast.makeText(context, "تم حفظ القوالب", Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { showManageTemplates = false }
+        )
+    }
 }
 
-/** زر يفتح قائمة القوالب الجاهزة */
+/** زر مضغوط يفتح قائمة القوالب الجاهزة + خيار الإدارة */
 @Composable
-private fun TemplatesButton(onPick: (String) -> Unit) {
+private fun TemplatesButton(
+    templates: List<MessageTemplates.Template>,
+    onPick: (String) -> Unit,
+    onManage: () -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("قوالب رسائل جاهزة", fontWeight = FontWeight.Bold)
+        TextButton(onClick = { expanded = true }) {
+            Text("قوالب جاهزة ▾", fontWeight = FontWeight.Bold)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            MessageTemplates.ALL.forEach { template ->
+            templates.forEach { template ->
                 DropdownMenuItem(
                     text = {
                         Column {
@@ -412,7 +436,8 @@ private fun TemplatesButton(onPick: (String) -> Unit) {
                             Text(
                                 template.body,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
                             )
                         }
                     },
@@ -422,8 +447,109 @@ private fun TemplatesButton(onPick: (String) -> Unit) {
                     }
                 )
             }
+            Divider()
+            DropdownMenuItem(
+                text = { Text("✏️ إدارة القوالب") },
+                onClick = {
+                    expanded = false
+                    onManage()
+                }
+            )
         }
     }
+}
+
+/**
+ * حوار إدارة القوالب: إضافة/تعديل/حذف، مع حفظ.
+ */
+@Composable
+private fun ManageTemplatesDialog(
+    initial: List<MessageTemplates.Template>,
+    onSave: (List<MessageTemplates.Template>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var items by remember { mutableStateOf(initial) }
+    // فهرس القالب قيد التحرير (-1 = قالب جديد، null = لا تحرير)
+    var editingIndex by remember { mutableStateOf<Int?>(null) }
+    var editTitle by remember { mutableStateOf("") }
+    var editBody by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = { onSave(items) }) { Text("حفظ") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } },
+        title = { Text("إدارة القوالب") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (editingIndex != null) {
+                    // محرّر القالب
+                    OutlinedTextField(
+                        value = editTitle,
+                        onValueChange = { editTitle = it },
+                        label = { Text("العنوان") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editBody,
+                        onValueChange = { editBody = it },
+                        label = { Text("النص (يدعم {الاسم} و{التاريخ})") },
+                        minLines = 2,
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            if (editTitle.isNotBlank() && editBody.isNotBlank()) {
+                                val t = MessageTemplates.Template(editTitle.trim(), editBody.trim())
+                                items = if (editingIndex == -1) items + t
+                                else items.toMutableList().also { it[editingIndex!!] = t }
+                                editingIndex = null
+                            }
+                        }) { Text("تم") }
+                        TextButton(onClick = { editingIndex = null }) { Text("رجوع") }
+                    }
+                } else {
+                    items.forEachIndexed { index, t ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(t.title, fontWeight = FontWeight.Bold)
+                                Text(
+                                    t.body,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
+                            IconButton(onClick = {
+                                editingIndex = index
+                                editTitle = t.title
+                                editBody = t.body
+                            }) { Icon(Icons.Filled.Edit, contentDescription = "تعديل") }
+                            IconButton(onClick = {
+                                items = items.toMutableList().also { it.removeAt(index) }
+                            }) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "حذف",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                        Divider()
+                    }
+                    TextButton(onClick = {
+                        editingIndex = -1
+                        editTitle = ""
+                        editBody = ""
+                    }) { Text("➕ إضافة قالب") }
+                }
+            }
+        }
+    )
 }
 
 /** صف إعداد: نص + مفتاح تبديل */

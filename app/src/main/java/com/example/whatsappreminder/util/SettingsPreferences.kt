@@ -25,6 +25,7 @@ class SettingsPreferences(context: Context) {
         private const val KEY_SOUND_ENABLED = "sound_enabled"
         private const val KEY_OPEN_WHATSAPP_DIRECTLY = "open_whatsapp_directly"
         private const val KEY_ONBOARDED = "onboarded"
+        private const val KEY_TEMPLATES = "templates_json"
         private const val KEY_COUNTRY_CODE = "country_code"
         // رمز افتراضي (السعودية) — يمكن للمستخدم تغييره
         private const val DEFAULT_COUNTRY_CODE = "966"
@@ -37,6 +38,13 @@ class SettingsPreferences(context: Context) {
     fun setDefaultCountryCode(code: String) {
         val digits = code.filter { it.isDigit() }
         prefs.edit { putString(KEY_COUNTRY_CODE, digits.ifBlank { DEFAULT_COUNTRY_CODE }) }
+    }
+
+    /** قوالب الرسائل المخصّصة (JSON) — null يعني استخدام الافتراضية */
+    fun getTemplatesJson(): String? = prefs.getString(KEY_TEMPLATES, null)
+
+    fun setTemplatesJson(json: String) {
+        prefs.edit { putString(KEY_TEMPLATES, json) }
     }
 
     /** هل عُرضت شاشة الترحيب/الأذونات من قبل؟ */
