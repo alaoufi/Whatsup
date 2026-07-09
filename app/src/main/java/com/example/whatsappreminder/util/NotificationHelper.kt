@@ -192,6 +192,55 @@ class NotificationHelper @Inject constructor(
     }
 
     /**
+     * إشعار الإرسال الجماعي: عدة رسائل بنفس الموعد.
+     * الضغط يفتح شاشة الإرسال الجماعي للإرسال واحداً تلو الآخر.
+     */
+    fun showBatchNotification(
+        ids: LongArray,
+        contactNames: List<String>,
+        soundEnabled: Boolean,
+        openDirectly: Boolean
+    ) {
+        val intent = Intent(context, com.example.whatsappreminder.ui.batch.BatchSendActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(com.example.whatsappreminder.ui.batch.BatchSendActivity.EXTRA_IDS, ids)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            ids.first().toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val channelId = if (soundEnabled) soundChannelId() else SILENT_CHANNEL_ID
+        val names = contactNames.joinToString("، ")
+
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("لديك ${ids.size} رسائل جاهزة للإرسال")
+            .setContentText("اضغط للإرسال واحداً تلو الآخر")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(if (openDirectly) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_REMINDER)
+            .setVibrate(longArrayOf(0, 400, 200, 400))
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+
+        if (!settings.isHidePreview()) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText("المستلمون: $names"))
+        }
+        // فتح شاشة الإرسال الجماعي فوراً عند القفل إن كان الفتح المباشر مفعّلاً
+        if (openDirectly) {
+            builder.setFullScreenIntent(pendingIntent, true)
+        }
+        if (soundEnabled) builder.setSound(settings.getSoundUri()) else builder.setSilent(true)
+
+        if (hasNotificationPermission()) {
+            NotificationManagerCompat.from(context)
+                .notify(ids.first().toInt(), builder.build())
+        }
+    }
+
+    /**
      * عرض إشعار "رسالة فائتة" بعد تشغيل الجهاز:
      * يخبر المستخدم بوجود تذكير فات موعده، والضغط عليه يفتح واتساب لإرسال الرسالة.
      */

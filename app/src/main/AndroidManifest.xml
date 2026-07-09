@@ -89,6 +89,12 @@
             android:noHistory="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- شاشة الإرسال الجماعي: إرسال نفس الرسالة لعدة مستلمين تباعاً -->
+        <activity
+            android:name=".ui.batch.BatchSendActivity"
+            android:exported="false"
+            android:theme="@style/Theme.WhatsAppReminder" />
+
         <!-- مستقبِل إعادة التشغيل لإعادة جدولة التذكيرات -->
         <receiver
             android:name=".receiver.BootReceiver"

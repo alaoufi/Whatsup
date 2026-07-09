@@ -16,6 +16,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -52,9 +53,9 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             try {
                 val reminder = repository.getReminderByIdOnce(reminderId) ?: return@launch
 
-                // تجاهل إن كان أُلغي أو فُتح مسبقاً
-                if (reminder.status == ReminderStatus.CANCELLED ||
-                    reminder.status == ReminderStatus.OPENED
+                // تجاهل إن لم يعد بانتظار التنبيه (أُلغي/فُتح/نُبّه ضمن مجموعة سابقة)
+                if (reminder.status != ReminderStatus.SCHEDULED &&
+                    reminder.status != ReminderStatus.PENDING_NETWORK
                 ) return@launch
 
                 // عنوان الإشعار: الاسم إن وُجد، وإلا الرقم
@@ -62,6 +63,44 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                 // نص الرسالة بعد استبدال المتغيّرات ({الاسم}/{التاريخ})
                 val composed = reminder.composeMessage()
                 val now = System.currentTimeMillis()
+
+                // كشف الإرسال الجماعي: تذكيرات أخرى بنفس الموعد ما زالت منتظرة
+                // (تُنشأ معاً عند اختيار عدة مستلمين لنفس الرسالة)
+                val batch = repository.getAllReminders().first().filter {
+                    it.scheduledTime == reminder.scheduledTime &&
+                        (it.status == ReminderStatus.SCHEDULED ||
+                            it.status == ReminderStatus.PENDING_NETWORK)
+                }
+                if (batch.size > 1) {
+                    // أول منبّه يصل يعالج المجموعة كاملة ويوسمها NOTIFIED،
+                    // فتتجاهل بقية المنبّهات تذكيراتها (الشرط أعلاه).
+                    val ids = batch.map { it.id }.toLongArray()
+                    val names = batch.map { it.contactName.ifBlank { it.phoneNumber } }
+                    notificationHelper.showBatchNotification(
+                        ids = ids,
+                        contactNames = names,
+                        soundEnabled = batch.any { it.soundEnabled },
+                        openDirectly = batch.any { it.openWhatsAppDirectly }
+                    )
+                    batch.forEach {
+                        repository.updateStatus(it.id, ReminderStatus.NOTIFIED, notifiedAt = now)
+                    }
+                    // فتح شاشة الإرسال الجماعي فوراً إن سُمح بالعرض فوق التطبيقات
+                    if (batch.any { it.openWhatsAppDirectly } && Settings.canDrawOverlays(context)) {
+                        val batchIntent = Intent(
+                            context,
+                            com.example.whatsappreminder.ui.batch.BatchSendActivity::class.java
+                        ).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            putExtra(
+                                com.example.whatsappreminder.ui.batch.BatchSendActivity.EXTRA_IDS,
+                                ids
+                            )
+                        }
+                        runCatching { context.startActivity(batchIntent) }
+                    }
+                    return@launch
+                }
 
                 if (reminder.recurrence == RecurrenceType.NONE &&
                     now - reminder.scheduledTime > EXPIRY_THRESHOLD_MILLIS
