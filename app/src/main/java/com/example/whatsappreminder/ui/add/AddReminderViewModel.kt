@@ -28,6 +28,11 @@ data class AddReminderUiState(
     val openWhatsAppDirectly: Boolean = true,
     val recurrence: RecurrenceType = RecurrenceType.NONE,
     val category: String = "",
+    // أيام الأسبوع للتكرار المخصص (قناع بتات) وتاريخ انتهاء التكرار
+    val recurrenceDays: Int = 0,
+    val recurrenceEnd: Long? = null,
+    // مستلمون إضافيون (اسم، رقم) لإرسال نفس الرسالة لعدة أشخاص
+    val recipients: List<Pair<String, String>> = emptyList(),
     val contactNameError: String? = null,
     val phoneError: String? = null,
     val messageError: String? = null,
@@ -75,6 +80,8 @@ class AddReminderViewModel @Inject constructor(
                     openWhatsAppDirectly = reminder.openWhatsAppDirectly,
                     recurrence = reminder.recurrence,
                     category = reminder.category,
+                    recurrenceDays = reminder.recurrenceDays,
+                    recurrenceEnd = reminder.recurrenceEnd,
                     isEditing = true
                 )
             }
@@ -108,6 +115,39 @@ class AddReminderViewModel @Inject constructor(
     fun onCategoryChange(value: String) =
         _uiState.update { it.copy(category = value) }
 
+    /** تبديل يوم في قناع أيام التكرار المخصص */
+    fun onToggleRecurrenceDay(day: Int) =
+        _uiState.update {
+            it.copy(recurrenceDays = com.example.whatsappreminder.util.Recurrence.toggleDay(it.recurrenceDays, day))
+        }
+
+    fun onRecurrenceEndChange(millis: Long?) =
+        _uiState.update { it.copy(recurrenceEnd = millis) }
+
+    /** إضافة الرقم الحالي كمستلم إضافي وتفريغ الحقل لاختيار التالي */
+    fun addCurrentRecipient() {
+        val s = _uiState.value
+        val digits = s.phoneNumber.filter { it.isDigit() }
+        if (digits.length < 8) {
+            _uiState.update { it.copy(phoneError = "أدخل رقماً صالحاً أولاً") }
+            return
+        }
+        _uiState.update {
+            it.copy(
+                recipients = it.recipients + (it.contactName to it.phoneNumber.trim()),
+                contactName = "",
+                phoneNumber = "",
+                phoneError = null
+            )
+        }
+    }
+
+    /** إزالة مستلم من القائمة */
+    fun removeRecipient(index: Int) =
+        _uiState.update {
+            it.copy(recipients = it.recipients.filterIndexed { i, _ -> i != index })
+        }
+
     /**
      * التحقق من صحة المدخلات ثم حفظ التذكير.
      * يضبط isSaved=true عند النجاح لتغلق الشاشة نفسها.
@@ -118,11 +158,17 @@ class AddReminderViewModel @Inject constructor(
 
         // ملاحظة: الاسم لم يعد مطلوباً — يُلتقط تلقائياً من جهات الاتصال إن وُجد.
 
-        // رقم الهاتف: أرقام فقط بطول معقول (يُسمح بـ + في البداية)
+        // رقم الهاتف: أرقام فقط بطول معقول (يُسمح بـ + في البداية).
+        // يكفي وجود مستلمين في القائمة إن كان الحقل فارغاً.
         val digits = state.phoneNumber.filter { it.isDigit() }
+        val hasRecipients = state.recipients.isNotEmpty()
         val phoneError = when {
-            state.phoneNumber.isBlank() -> { valid = false; "أدخل رقم الهاتف" }
-            digits.length < 8 -> { valid = false; "رقم غير صالح (أدخل الرقم مع رمز الدولة)" }
+            state.phoneNumber.isBlank() && !hasRecipients -> {
+                valid = false; "أدخل رقم الهاتف"
+            }
+            state.phoneNumber.isNotBlank() && digits.length < 8 -> {
+                valid = false; "رقم غير صالح (أدخل الرقم مع رمز الدولة)"
+            }
             else -> null
         }
 
@@ -152,25 +198,39 @@ class AddReminderViewModel @Inject constructor(
 
         // حفظ التذكير (إضافة جديدة أو تحديث الموجود)
         viewModelScope.launch {
-            val reminder = Reminder(
-                id = editingId,
-                contactName = state.contactName.trim(),
-                phoneNumber = state.phoneNumber.trim(),
+            // دالة بناء تذكير لمستلم معيّن
+            fun buildReminder(id: Long, name: String, phone: String) = Reminder(
+                id = id,
+                contactName = name.trim(),
+                phoneNumber = phone.trim(),
                 message = state.message.trim(),
                 scheduledTime = state.scheduledTime!!,
                 status = ReminderStatus.SCHEDULED,
-                createdAt = if (editingId > 0L) originalCreatedAt else System.currentTimeMillis(),
+                createdAt = if (id > 0L) originalCreatedAt else System.currentTimeMillis(),
                 notes = state.notes.trim(),
                 soundEnabled = state.soundEnabled,
                 openWhatsAppDirectly = state.openWhatsAppDirectly,
                 recurrence = state.recurrence,
-                category = state.category
+                category = state.category,
+                recurrenceDays = state.recurrenceDays,
+                recurrenceEnd = state.recurrenceEnd
             )
+
             if (editingId > 0L) {
                 // تحديث: يعيد الجدولة بالوقت الجديد لأن الحالة SCHEDULED
-                updateReminderUseCase(reminder)
+                updateReminderUseCase(
+                    buildReminder(editingId, state.contactName, state.phoneNumber)
+                )
             } else {
-                addReminderUseCase(reminder)
+                // قائمة المستلمين: المضافون + الرقم الحالي إن وُجد
+                val all = state.recipients +
+                    if (state.phoneNumber.isNotBlank())
+                        listOf(state.contactName to state.phoneNumber)
+                    else emptyList()
+                // إنشاء تذكير مستقل لكل مستلم بنفس الرسالة والوقت
+                all.forEach { (name, phone) ->
+                    addReminderUseCase(buildReminder(0L, name, phone))
+                }
             }
             _uiState.update { it.copy(isSaved = true) }
         }

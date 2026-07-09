@@ -31,8 +31,8 @@ class ReminderActionReceiver : BroadcastReceiver() {
         const val ACTION_SNOOZE = "com.example.whatsappreminder.action.SNOOZE"
         const val ACTION_DONE = "com.example.whatsappreminder.action.DONE"
         const val EXTRA_ID = "extra_action_id"
-        // مدة التأجيل: ساعة واحدة
-        const val SNOOZE_MILLIS = 60 * 60 * 1000L
+        // مدة التأجيل بالدقائق (تُمرَّر مع النية؛ الافتراضي ساعة)
+        const val EXTRA_MINUTES = "extra_snooze_minutes"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -45,8 +45,9 @@ class ReminderActionReceiver : BroadcastReceiver() {
                 val reminder = repository.getReminderByIdOnce(id) ?: return@launch
                 when (intent.action) {
                     ACTION_SNOOZE -> {
-                        // تأجيل ساعة: موعد جديد وإعادة الجدولة
-                        val newTime = System.currentTimeMillis() + SNOOZE_MILLIS
+                        // تأجيل بالمدة المطلوبة: موعد جديد وإعادة الجدولة
+                        val minutes = intent.getIntExtra(EXTRA_MINUTES, 60)
+                        val newTime = System.currentTimeMillis() + minutes * 60_000L
                         val updated = reminder.copy(
                             scheduledTime = newTime,
                             status = ReminderStatus.SCHEDULED,

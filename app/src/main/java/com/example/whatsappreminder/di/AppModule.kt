@@ -31,7 +31,11 @@ object AppModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .addMigrations(
+                AppDatabase.MIGRATION_1_2,
+                AppDatabase.MIGRATION_2_3,
+                AppDatabase.MIGRATION_3_4
+            )
             // شبكة أمان: في حال أي فرق مخطط غير متوقع أثناء التطوير
             .fallbackToDestructiveMigration()
             .build()
@@ -45,8 +49,10 @@ object AppModule {
     /** ربط واجهة المستودع بتنفيذها الفعلي */
     @Provides
     @Singleton
-    fun provideReminderRepository(dao: ReminderDao): ReminderRepository =
-        ReminderRepositoryImpl(dao)
+    fun provideReminderRepository(
+        dao: ReminderDao,
+        @ApplicationContext context: Context
+    ): ReminderRepository = ReminderRepositoryImpl(dao, context)
 
     /** ربط واجهة الجدولة بتنفيذها المعتمد على المنبّه الدقيق (AlarmManager) */
     @Provides

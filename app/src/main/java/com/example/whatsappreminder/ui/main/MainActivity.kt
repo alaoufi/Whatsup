@@ -41,7 +41,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
@@ -49,14 +54,18 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DismissValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.SwipeToDismiss
+import androidx.compose.material3.rememberDismissState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -92,6 +101,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.LaunchedEffect
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -111,9 +122,10 @@ import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * الشاشة الرئيسية: تعرض قائمة التذكيرات وتتيح إضافة/تصدير/استيراد التذكيرات.
+ * ترث FragmentActivity لدعم قفل البصمة (BiometricPrompt).
  */
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // عرض شاشة البداية الرسمية قبل تحميل الواجهة
@@ -122,18 +134,71 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             WhatsAppReminderTheme {
-                MainScreen(
-                    onAddClick = {
-                        startActivity(Intent(this, AddReminderActivity::class.java))
-                    },
-                    onItemClick = { reminder ->
-                        val intent = Intent(this, ReminderDetailActivity::class.java).apply {
-                            putExtra(NotificationHelper.EXTRA_REMINDER_ID, reminder.id)
+                // بوابة قفل البصمة: تُعرض الواجهة بعد نجاح التحقق (إن كان القفل مفعّلاً)
+                var unlocked by remember {
+                    mutableStateOf(!SettingsPreferences(this).isBiometricLock())
+                }
+                if (!unlocked) {
+                    LockScreen(onRequestUnlock = { authenticate { unlocked = true } })
+                    // محاولة تلقائية عند الدخول
+                    LaunchedEffect(Unit) { authenticate { unlocked = true } }
+                } else {
+                    MainScreen(
+                        onAddClick = {
+                            startActivity(Intent(this, AddReminderActivity::class.java))
+                        },
+                        onItemClick = { reminder ->
+                            val intent = Intent(this, ReminderDetailActivity::class.java).apply {
+                                putExtra(NotificationHelper.EXTRA_REMINDER_ID, reminder.id)
+                            }
+                            startActivity(intent)
                         }
-                        startActivity(intent)
-                    }
-                )
+                    )
+                }
             }
+        }
+    }
+
+    /** إطلاق نافذة التحقق بالبصمة/قفل الجهاز */
+    private fun authenticate(onSuccess: () -> Unit) {
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(
+                    result: BiometricPrompt.AuthenticationResult
+                ) {
+                    onSuccess()
+                }
+            }
+        )
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("فتح تذكيرات واتساب")
+            .setSubtitle("استخدم بصمتك أو قفل الجهاز")
+            .setAllowedAuthenticators(
+                BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            )
+            .build()
+        runCatching { prompt.authenticate(info) }
+    }
+}
+
+/** شاشة القفل: تظهر حتى نجاح التحقق */
+@Composable
+private fun LockScreen(onRequestUnlock: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Filled.Lock,
+                contentDescription = null,
+                modifier = Modifier.size(72.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(16.dp))
+            Text("التطبيق مقفل", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = onRequestUnlock) { Text("فتح بالبصمة") }
         }
     }
 }
@@ -160,9 +225,13 @@ fun MainScreen(
     // البحث وفلترة التصنيف
     var searchQuery by remember { mutableStateOf("") }
     var categoryFilter by remember { mutableStateOf("") }
-    // إظهار حوار رمز الدولة / حول التطبيق
+    // إظهار حوار رمز الدولة / حول التطبيق / الإحصائيات
     var showCountryDialog by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
+    var showStats by remember { mutableStateOf(false) }
+    // حالات المفاتيح (قفل بالبصمة / إخفاء المعاينة)
+    var lockEnabled by remember { mutableStateOf(SettingsPreferences(context).isBiometricLock()) }
+    var hidePreview by remember { mutableStateOf(SettingsPreferences(context).isHidePreview()) }
 
     // شاشة الترحيب/الأذونات عند أول تشغيل
     val settingsPrefs = remember { SettingsPreferences(context) }
@@ -256,6 +325,32 @@ fun MainScreen(
                         },
                         onCountryCode = { showCountryDialog = true },
                         onAbout = { showAbout = true },
+                        onStats = { showStats = true },
+                        onToggleTheme = {
+                            com.example.whatsappreminder.ui.theme.ThemeState.setMode(
+                                context,
+                                (com.example.whatsappreminder.ui.theme.ThemeState.mode + 1) % 3
+                            )
+                        },
+                        lockEnabled = lockEnabled,
+                        onToggleLock = {
+                            val newValue = !lockEnabled
+                            SettingsPreferences(context).setBiometricLock(newValue)
+                            lockEnabled = newValue
+                            Toast.makeText(
+                                context,
+                                if (newValue) "سيُطلب فتح القفل عند الدخول التالي"
+                                else "تم إيقاف قفل البصمة",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        },
+                        hidePreview = hidePreview,
+                        onTogglePreview = {
+                            val newValue = !hidePreview
+                            SettingsPreferences(context).setHidePreview(newValue)
+                            hidePreview = newValue
+                        },
+                        onRestoreAuto = { viewModel.restoreAutoBackup() },
                         onExport = { viewModel.requestExport() },
                         onImport = { openDocLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
                         onPickSound = {
@@ -356,22 +451,34 @@ fun MainScreen(
                     if (active.isNotEmpty()) {
                         item(key = "h_active") { SectionHeader("قادمة (${active.size})") }
                         items(active, key = { it.id }) { reminder ->
-                            ReminderCard(
+                            SwipeableReminderCard(
                                 reminder = reminder,
                                 modifier = Modifier.animateItemPlacement(),
                                 onClick = { onItemClick(reminder) },
-                                onDelete = { pendingDelete = reminder }
+                                onDelete = { pendingDelete = reminder },
+                                onSend = {
+                                    WhatsAppOpener.openChat(
+                                        context, reminder.phoneNumber, reminder.composeMessage()
+                                    )
+                                    viewModel.markOpened(reminder)
+                                }
                             )
                         }
                     }
                     if (done.isNotEmpty()) {
                         item(key = "h_done") { SectionHeader("منتهية (${done.size})") }
                         items(done, key = { it.id }) { reminder ->
-                            ReminderCard(
+                            SwipeableReminderCard(
                                 reminder = reminder,
                                 modifier = Modifier.animateItemPlacement(),
                                 onClick = { onItemClick(reminder) },
-                                onDelete = { pendingDelete = reminder }
+                                onDelete = { pendingDelete = reminder },
+                                onSend = {
+                                    WhatsAppOpener.openChat(
+                                        context, reminder.phoneNumber, reminder.composeMessage()
+                                    )
+                                    viewModel.markOpened(reminder)
+                                }
                             )
                         }
                     }
@@ -487,6 +594,68 @@ fun MainScreen(
     // حوار حول التطبيق
     if (showAbout) {
         AboutDialog(onDismiss = { showAbout = false })
+    }
+
+    // حوار الإحصائيات
+    if (showStats) {
+        StatsDialog(reminders = uiState.reminders, onDismiss = { showStats = false })
+    }
+}
+
+/** حوار إحصائيات الاستخدام */
+@Composable
+private fun StatsDialog(reminders: List<Reminder>, onDismiss: () -> Unit) {
+    val now = System.currentTimeMillis()
+    val weekAgo = now - 7L * 24 * 60 * 60 * 1000
+    val monthAgo = now - 30L * 24 * 60 * 60 * 1000
+
+    // "أُرسلت" = فُتح واتساب لها (OPENED)
+    val sent = reminders.filter { it.status == ReminderStatus.OPENED }
+    val sentWeek = sent.count { (it.notifiedAt ?: it.scheduledTime) >= weekAgo }
+    val sentMonth = sent.count { (it.notifiedAt ?: it.scheduledTime) >= monthAgo }
+    val upcoming = reminders.count {
+        it.status == ReminderStatus.SCHEDULED && it.scheduledTime > now
+    }
+    val expired = reminders.count { it.status == ReminderStatus.EXPIRED }
+    // أكثر جهة تواصلاً
+    val topContact = sent
+        .groupBy { it.contactName.ifBlank { it.phoneNumber } }
+        .maxByOrNull { it.value.size }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("حسناً") } },
+        title = { Text("الإحصائيات") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatRow("رسائل أُرسلت هذا الأسبوع", "$sentWeek")
+                StatRow("رسائل أُرسلت هذا الشهر", "$sentMonth")
+                StatRow("إجمالي الرسائل المُرسلة", "${sent.size}")
+                StatRow("تذكيرات قادمة", "$upcoming")
+                StatRow("مواعيد فائتة", "$expired")
+                topContact?.let {
+                    StatRow("الأكثر تواصلاً", "${it.key} (${it.value.size})")
+                }
+            }
+        }
+    )
+}
+
+/** صف إحصائية: عنوان + قيمة */
+@Composable
+private fun StatRow(label: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
 
@@ -757,6 +926,13 @@ private fun OverflowMenu(
     onAutoOpen: () -> Unit,
     onCountryCode: () -> Unit,
     onAbout: () -> Unit,
+    onStats: () -> Unit,
+    onToggleTheme: () -> Unit,
+    lockEnabled: Boolean,
+    onToggleLock: () -> Unit,
+    hidePreview: Boolean,
+    onTogglePreview: () -> Unit,
+    onRestoreAuto: () -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
     onPickSound: () -> Unit
@@ -790,6 +966,33 @@ private fun OverflowMenu(
             text = { Text("استيراد نسخة احتياطية") },
             leadingIcon = { Icon(Icons.Filled.FileUpload, contentDescription = null) },
             onClick = { expanded = false; onImport() }
+        )
+        DropdownMenuItem(
+            text = { Text("الإحصائيات") },
+            leadingIcon = { Icon(Icons.Filled.BarChart, contentDescription = null) },
+            onClick = { expanded = false; onStats() }
+        )
+        DropdownMenuItem(
+            text = {
+                Text("الوضع: ${com.example.whatsappreminder.ui.theme.ThemeState.label()}")
+            },
+            leadingIcon = { Icon(Icons.Filled.DarkMode, contentDescription = null) },
+            onClick = { onToggleTheme() }
+        )
+        DropdownMenuItem(
+            text = { Text(if (lockEnabled) "قفل البصمة: مفعّل" else "قفل البصمة: معطّل") },
+            leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+            onClick = { expanded = false; onToggleLock() }
+        )
+        DropdownMenuItem(
+            text = { Text(if (hidePreview) "إخفاء نص الإشعار: نعم" else "إخفاء نص الإشعار: لا") },
+            leadingIcon = { Icon(Icons.Filled.VisibilityOff, contentDescription = null) },
+            onClick = { expanded = false; onTogglePreview() }
+        )
+        DropdownMenuItem(
+            text = { Text("استعادة النسخة التلقائية") },
+            leadingIcon = { Icon(Icons.Filled.Restore, contentDescription = null) },
+            onClick = { expanded = false; onRestoreAuto() }
         )
         DropdownMenuItem(
             text = { Text("حول التطبيق") },
@@ -874,6 +1077,57 @@ private fun StatusChip(reminder: Reminder) {
             )
         }
     }
+}
+
+/**
+ * بطاقة قابلة للسحب: سحب باتجاه = فتح واتساب للإرسال، والاتجاه الآخر = حذف.
+ * لا يُثبَّت السحب بصرياً — يعود للوضع الطبيعي بعد إطلاق الإجراء.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableReminderCard(
+    reminder: Reminder,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    onSend: () -> Unit
+) {
+    val dismissState = rememberDismissState(
+        confirmValueChange = { value ->
+            when (value) {
+                DismissValue.DismissedToEnd -> { onSend(); false }
+                DismissValue.DismissedToStart -> { onDelete(); false }
+                else -> false
+            }
+        }
+    )
+    SwipeToDismiss(
+        state = dismissState,
+        modifier = modifier,
+        background = {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Icon(
+                    Icons.Filled.Send,
+                    contentDescription = "إرسال",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Icon(
+                    Icons.Filled.Delete,
+                    contentDescription = "حذف",
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        },
+        dismissContent = {
+            ReminderCard(reminder = reminder, onClick = onClick, onDelete = onDelete)
+        }
+    )
 }
 
 /** بطاقة عرض تذكير واحد في القائمة */

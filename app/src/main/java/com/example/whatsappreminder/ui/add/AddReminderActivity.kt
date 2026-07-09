@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -93,9 +95,18 @@ class AddReminderActivity : ComponentActivity() {
         val reminderId = intent.getLongExtra(
             com.example.whatsappreminder.util.NotificationHelper.EXTRA_REMINDER_ID, 0L
         )
+        // نص مُشارَك من تطبيق آخر (ACTION_SEND): رقم → حقل الرقم، وإلا → نص الرسالة
+        val sharedText = if (intent.action == android.content.Intent.ACTION_SEND) {
+            intent.getStringExtra(android.content.Intent.EXTRA_TEXT)
+        } else null
+
         setContent {
             WhatsAppReminderTheme {
-                AddReminderScreen(reminderId = reminderId, onBack = { finish() })
+                AddReminderScreen(
+                    reminderId = reminderId,
+                    sharedText = sharedText,
+                    onBack = { finish() }
+                )
             }
         }
     }
@@ -106,6 +117,7 @@ class AddReminderActivity : ComponentActivity() {
 fun AddReminderScreen(
     onBack: () -> Unit,
     reminderId: Long = 0L,
+    sharedText: String? = null,
     viewModel: AddReminderViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -114,6 +126,19 @@ fun AddReminderScreen(
     // عند التعديل: تحميل بيانات التذكير الموجود
     LaunchedEffect(reminderId) {
         if (reminderId > 0L) viewModel.loadForEdit(reminderId)
+    }
+
+    // معالجة النص المشارك من تطبيق آخر (مرة واحدة)
+    LaunchedEffect(sharedText) {
+        if (!sharedText.isNullOrBlank()) {
+            val digits = sharedText.filter { it.isDigit() }
+            // إن كان معظم النص أرقاماً فهو رقم هاتف، وإلا فهو نص رسالة
+            if (digits.length >= 8 && digits.length >= sharedText.trim().length / 2) {
+                viewModel.onPhoneChange(sharedText.trim())
+            } else {
+                viewModel.onMessageChange(sharedText.trim())
+            }
+        }
     }
 
     // صلاحية قراءة جهات الاتصال
@@ -141,6 +166,7 @@ fun AddReminderScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var pickedDateMillis by remember { mutableStateOf<Long?>(null) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
 
     // قوالب الرسائل (قابلة للتعديل) وإدارتها
     var templates by remember { mutableStateOf(TemplateStore.load(context)) }
@@ -259,6 +285,36 @@ fun AddReminderScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // مستلمون إضافيون (نفس الرسالة لعدة أشخاص) — للإضافة الجديدة فقط
+            if (!state.isEditing) {
+                if (state.recipients.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        state.recipients.forEachIndexed { index, pair ->
+                            val (name, number) = pair
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "• " + name.ifBlank { number } +
+                                        if (name.isNotBlank()) " ($number)" else "",
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                IconButton(onClick = { viewModel.removeRecipient(index) }) {
+                                    Icon(
+                                        Icons.Filled.Delete,
+                                        contentDescription = "إزالة",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                TextButton(onClick = { viewModel.addCurrentRecipient() }) {
+                    Text("➕ إضافة مستلم آخر (نفس الرسالة)", fontWeight = FontWeight.Bold)
+                }
+            }
+
             // نص الرسالة (العدّاد داخل العنوان لتوفير الارتفاع)
             OutlinedTextField(
                 value = state.message,
@@ -323,6 +379,43 @@ fun AddReminderScreen(
                     onSelected = { viewModel.onCategoryChange(categories[it]) },
                     modifier = Modifier.weight(1f)
                 )
+            }
+
+            // أيام الأسبوع للتكرار المخصص
+            if (state.recurrence == RecurrenceType.CUSTOM_DAYS) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Recurrence.DAY_NAMES.forEachIndexed { day, name ->
+                        FilterChip(
+                            selected = Recurrence.isDaySet(state.recurrenceDays, day),
+                            onClick = { viewModel.onToggleRecurrenceDay(day) },
+                            label = { Text(name) }
+                        )
+                    }
+                }
+            }
+
+            // تاريخ انتهاء التكرار (اختياري) لأي نوع تكرار
+            if (state.recurrence != RecurrenceType.NONE) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { showEndDatePicker = true }) {
+                        Text(
+                            state.recurrenceEnd?.let {
+                                "ينتهي: ${DateFormatter.formatShort(it)}"
+                            } ?: "تحديد تاريخ انتهاء التكرار (اختياري)",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (state.recurrenceEnd != null) {
+                        TextButton(onClick = { viewModel.onRecurrenceEndChange(null) }) {
+                            Text("إزالة")
+                        }
+                    }
+                }
             }
 
             // إعدادات هذا التذكير
@@ -398,6 +491,28 @@ fun AddReminderScreen(
                 showTimePicker = false
             }
         )
+    }
+
+    // منتقي تاريخ انتهاء التكرار
+    if (showEndDatePicker) {
+        val endState = rememberDatePickerState(
+            initialSelectedDateMillis = state.recurrenceEnd ?: System.currentTimeMillis()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showEndDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    // نهاية اليوم المختار حتى يشمل تذكيرات ذلك اليوم
+                    endState.selectedDateMillis?.let { millis ->
+                        viewModel.onRecurrenceEndChange(millis + 24L * 60 * 60 * 1000 - 1)
+                    }
+                    showEndDatePicker = false
+                }) { Text("حفظ") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndDatePicker = false }) { Text("إلغاء") }
+            }
+        ) { DatePicker(state = endState) }
     }
 
     // حوار إدارة القوالب

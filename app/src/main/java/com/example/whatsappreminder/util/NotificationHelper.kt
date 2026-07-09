@@ -142,13 +142,16 @@ class NotificationHelper @Inject constructor(
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(context.getString(R.string.notification_title))
             .setContentText(context.getString(R.string.notification_text, contactName))
-            // عرض الرسالة كاملة عند توسيع الإشعار
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(if (openDirectly) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_REMINDER)
             .setVibrate(longArrayOf(0, 400, 200, 400))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+
+        // عرض نص الرسالة كاملاً فقط إن لم يفعّل المستخدم "إخفاء المعاينة"
+        if (!settings.isHidePreview()) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(message))
+        }
 
         // عند "يفتح واتساب مباشرة": إشعار ملء الشاشة يفتح واتساب تلقائياً
         // (خاصة عند قفل الشاشة) دون حاجة لضغط الإشعار.
@@ -158,27 +161,17 @@ class NotificationHelper @Inject constructor(
 
         if (soundEnabled) builder.setSound(settings.getSoundUri()) else builder.setSilent(true)
 
-        // زر "فتح واتساب" (يفتح المحادثة مباشرة)
-        val openIntent = Intent(context, OpenWhatsAppActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_REMINDER_ID, reminderId)
-            putExtra(EXTRA_PHONE, phoneNumber)
-            putExtra(EXTRA_MESSAGE, message)
-        }
-        val openPi = PendingIntent.getActivity(
-            context, (reminderId * 10 + 3).toInt(), openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        // زر "تأجيل ساعة"
-        val snoozePi = PendingIntent.getBroadcast(
-            context, (reminderId * 10 + 1).toInt(),
-            Intent(context, ReminderActionReceiver::class.java).apply {
-                action = ReminderActionReceiver.ACTION_SNOOZE
-                putExtra(ReminderActionReceiver.EXTRA_ID, reminderId)
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        // زر "تم"
+        // أزرار التأجيل المخصص + تم (الضغط على جسم الإشعار يفتح واتساب/التفاصيل)
+        fun snoozePi(minutes: Int, requestOffset: Int): PendingIntent =
+            PendingIntent.getBroadcast(
+                context, (reminderId * 10 + requestOffset).toInt(),
+                Intent(context, ReminderActionReceiver::class.java).apply {
+                    action = ReminderActionReceiver.ACTION_SNOOZE
+                    putExtra(ReminderActionReceiver.EXTRA_ID, reminderId)
+                    putExtra(ReminderActionReceiver.EXTRA_MINUTES, minutes)
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
         val donePi = PendingIntent.getBroadcast(
             context, (reminderId * 10 + 2).toInt(),
             Intent(context, ReminderActionReceiver::class.java).apply {
@@ -187,8 +180,8 @@ class NotificationHelper @Inject constructor(
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        builder.addAction(R.drawable.ic_notification, "فتح واتساب", openPi)
-        builder.addAction(R.drawable.ic_notification, "تأجيل ساعة", snoozePi)
+        builder.addAction(R.drawable.ic_notification, "تأجيل ١٠د", snoozePi(10, 1))
+        builder.addAction(R.drawable.ic_notification, "تأجيل ساعة", snoozePi(60, 3))
         builder.addAction(R.drawable.ic_notification, "تم", donePi)
 
         // التحقق من صلاحية الإشعارات قبل العرض لتجنّب استثناء الأمان
@@ -229,8 +222,12 @@ class NotificationHelper @Inject constructor(
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(context.getString(R.string.notification_missed_title))
             .setContentText(context.getString(R.string.notification_missed_text, contactName))
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+
+        if (!settings.isHidePreview()) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(message))
+        }
+        builder
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVibrate(longArrayOf(0, 400, 200, 400))
             .setAutoCancel(true)

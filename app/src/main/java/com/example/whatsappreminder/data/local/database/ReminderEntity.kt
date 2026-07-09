@@ -50,7 +50,13 @@ data class ReminderEntity(
     val recurrence: String = "NONE",
 
     @ColumnInfo(name = "category", defaultValue = "")
-    val category: String = ""
+    val category: String = "",
+
+    @ColumnInfo(name = "recurrence_days", defaultValue = "0")
+    val recurrenceDays: Int = 0,
+
+    @ColumnInfo(name = "recurrence_end")
+    val recurrenceEnd: Long? = null
 )
 
 /**
@@ -72,7 +78,9 @@ fun ReminderEntity.toDomain(): Reminder = Reminder(
     openWhatsAppDirectly = openWhatsAppDirectly,
     recurrence = runCatching { RecurrenceType.valueOf(recurrence) }
         .getOrDefault(RecurrenceType.NONE),
-    category = category
+    category = category,
+    recurrenceDays = recurrenceDays,
+    recurrenceEnd = recurrenceEnd
 )
 
 /**
@@ -91,5 +99,7 @@ fun Reminder.toEntity(): ReminderEntity = ReminderEntity(
     soundEnabled = soundEnabled,
     openWhatsAppDirectly = openWhatsAppDirectly,
     recurrence = recurrence.name,
-    category = category
+    category = category,
+    recurrenceDays = recurrenceDays,
+    recurrenceEnd = recurrenceEnd
 )

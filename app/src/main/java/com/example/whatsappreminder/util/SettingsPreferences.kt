@@ -27,6 +27,9 @@ class SettingsPreferences(context: Context) {
         private const val KEY_ONBOARDED = "onboarded"
         private const val KEY_TEMPLATES = "templates_json"
         private const val KEY_COUNTRY_CODE = "country_code"
+        private const val KEY_HIDE_PREVIEW = "hide_preview"
+        private const val KEY_THEME_MODE = "theme_mode"
+        private const val KEY_BIOMETRIC_LOCK = "biometric_lock"
         // رمز افتراضي (السعودية) — يمكن للمستخدم تغييره
         private const val DEFAULT_COUNTRY_CODE = "966"
     }
@@ -38,6 +41,27 @@ class SettingsPreferences(context: Context) {
     fun setDefaultCountryCode(code: String) {
         val digits = code.filter { it.isDigit() }
         prefs.edit { putString(KEY_COUNTRY_CODE, digits.ifBlank { DEFAULT_COUNTRY_CODE }) }
+    }
+
+    /** إخفاء نص الرسالة من الإشعار (يظهر الاسم فقط) */
+    fun isHidePreview(): Boolean = prefs.getBoolean(KEY_HIDE_PREVIEW, false)
+
+    fun setHidePreview(hide: Boolean) {
+        prefs.edit { putBoolean(KEY_HIDE_PREVIEW, hide) }
+    }
+
+    /** وضع السمة: 0=تلقائي (النظام)، 1=فاتح، 2=داكن */
+    fun getThemeMode(): Int = prefs.getInt(KEY_THEME_MODE, 0)
+
+    fun setThemeMode(mode: Int) {
+        prefs.edit { putInt(KEY_THEME_MODE, mode.coerceIn(0, 2)) }
+    }
+
+    /** قفل التطبيق بالبصمة */
+    fun isBiometricLock(): Boolean = prefs.getBoolean(KEY_BIOMETRIC_LOCK, false)
+
+    fun setBiometricLock(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_BIOMETRIC_LOCK, enabled) }
     }
 
     /** قوالب الرسائل المخصّصة (JSON) — null يعني استخدام الافتراضية */

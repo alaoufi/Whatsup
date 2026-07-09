@@ -29,15 +29,20 @@ data class Reminder(
     val soundEnabled: Boolean = true,
     val openWhatsAppDirectly: Boolean = true,
     val recurrence: RecurrenceType = RecurrenceType.NONE,
-    val category: String = ""
+    val category: String = "",
+    // قناع أيام الأسبوع للتكرار المخصص (بت 0=الأحد ... بت 6=السبت)
+    val recurrenceDays: Int = 0,
+    // تاريخ انتهاء التكرار (null = بلا نهاية)
+    val recurrenceEnd: Long? = null
 )
 
 /** نوع تكرار التذكير */
 enum class RecurrenceType {
-    NONE,     // مرة واحدة
-    DAILY,    // يومي
-    WEEKLY,   // أسبوعي
-    MONTHLY   // شهري
+    NONE,        // مرة واحدة
+    DAILY,       // يومي
+    WEEKLY,      // أسبوعي
+    MONTHLY,     // شهري
+    CUSTOM_DAYS  // أيام محددة من الأسبوع
 }
 
 /**

@@ -61,11 +61,17 @@ private val LightColorScheme = lightColorScheme(
  */
 @Composable
 fun WhatsAppReminderTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     // تفعيل الألوان الديناميكية (Material You) على Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    // تحميل وضع السمة المحفوظ (تلقائي/فاتح/داكن) وتطبيقه
+    ThemeState.init(LocalContext.current)
+    val darkTheme = when (ThemeState.mode) {
+        1 -> false
+        2 -> true
+        else -> isSystemInDarkTheme()
+    }
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current

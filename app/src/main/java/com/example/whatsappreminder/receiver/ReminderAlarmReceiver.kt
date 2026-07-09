@@ -81,9 +81,15 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                         openDirectly = reminder.openWhatsAppDirectly
                     )
 
-                    if (reminder.recurrence != RecurrenceType.NONE) {
-                        // متكرر: جدولة الموعد التالي وإبقاء الحالة SCHEDULED
-                        val next = Recurrence.next(reminder.scheduledTime, reminder.recurrence, now)
+                    // متكرر: جدولة الموعد التالي (null = انتهى التكرار أو غير متكرر)
+                    val next = Recurrence.next(
+                        fromMillis = reminder.scheduledTime,
+                        type = reminder.recurrence,
+                        notBefore = now,
+                        daysMask = reminder.recurrenceDays,
+                        endMillis = reminder.recurrenceEnd
+                    )
+                    if (next != null) {
                         val nextReminder = reminder.copy(
                             scheduledTime = next,
                             status = ReminderStatus.SCHEDULED,

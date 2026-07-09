@@ -41,7 +41,8 @@ class MainViewModel @Inject constructor(
     private val exportRemindersUseCase: ExportRemindersUseCase,
     private val importRemindersUseCase: ImportRemindersUseCase,
     private val updateReminderUseCase: UpdateReminderUseCase,
-    private val addReminderUseCase: AddReminderUseCase
+    private val addReminderUseCase: AddReminderUseCase,
+    private val autoBackup: com.example.whatsappreminder.util.AutoBackup
 ) : ViewModel() {
 
     // تحويل تدفق التذكيرات إلى حالة واجهة قابلة للمراقبة
@@ -52,6 +53,24 @@ class MainViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = MainUiState()
         )
+
+    init {
+        // نسخة احتياطية تلقائية عند كل فتح للتطبيق
+        viewModelScope.launch { autoBackup.run() }
+    }
+
+    /** استعادة التذكيرات من النسخة التلقائية الداخلية */
+    fun restoreAutoBackup() {
+        viewModelScope.launch {
+            val json = autoBackup.read()
+            if (json == null) {
+                _events.emit(MainEvent.Message("لا توجد نسخة تلقائية بعد"))
+            } else {
+                val count = runCatching { importRemindersUseCase(json) }.getOrNull() ?: 0
+                _events.emit(MainEvent.Message("تمت استعادة $count تذكيراً"))
+            }
+        }
+    }
 
     // قناة الأحداث لمرة واحدة
     private val _events = kotlinx.coroutines.flow.MutableSharedFlow<MainEvent>()

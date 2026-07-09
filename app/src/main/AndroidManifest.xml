@@ -62,10 +62,17 @@
         <!-- شاشة إضافة تذكير -->
         <activity
             android:name=".ui.add.AddReminderActivity"
-            android:exported="false"
+            android:exported="true"
             android:parentActivityName=".ui.main.MainActivity"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.WhatsAppReminder" />
+            android:theme="@style/Theme.WhatsAppReminder">
+            <!-- إنشاء تذكير من مشاركة نص/رقم من أي تطبيق -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
 
         <!-- شاشة تفاصيل التذكير (تُفتح من القائمة ومن إشعار "فات الموعد") -->
         <activity
@@ -104,6 +111,18 @@
             android:name=".receiver.ReminderActionReceiver"
             android:enabled="true"
             android:exported="false" />
+
+        <!-- أداة الشاشة الرئيسية -->
+        <receiver
+            android:name=".widget.ReminderWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
 
         <!-- تعطيل التهيئة الافتراضية لـ WorkManager لأننا نستخدم Hilt (Configuration.Provider) -->
         <provider

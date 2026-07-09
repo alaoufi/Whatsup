@@ -35,6 +35,8 @@ object ReminderBackup {
                 put("openWhatsAppDirectly", r.openWhatsAppDirectly)
                 put("recurrence", r.recurrence.name)
                 put("category", r.category)
+                put("recurrenceDays", r.recurrenceDays)
+                put("recurrenceEnd", r.recurrenceEnd ?: JSONObject.NULL)
             }
             array.put(obj)
         }
@@ -75,7 +77,10 @@ object ReminderBackup {
                     recurrence = runCatching {
                         RecurrenceType.valueOf(obj.optString("recurrence", "NONE"))
                     }.getOrDefault(RecurrenceType.NONE),
-                    category = obj.optString("category", "")
+                    category = obj.optString("category", ""),
+                    recurrenceDays = obj.optInt("recurrenceDays", 0),
+                    recurrenceEnd = if (obj.isNull("recurrenceEnd")) null
+                    else obj.optLong("recurrenceEnd")
                 )
             )
         }
