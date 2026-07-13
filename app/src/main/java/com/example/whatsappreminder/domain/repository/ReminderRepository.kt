@@ -33,4 +33,7 @@ interface ReminderRepository {
 
     /** حذف تذكير */
     suspend fun deleteReminder(reminder: Reminder)
+
+    /** حذف كل التذكيرات (للمسح الشامل) */
+    suspend fun deleteAllReminders()
 }

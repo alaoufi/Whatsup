@@ -42,7 +42,8 @@ class MainViewModel @Inject constructor(
     private val importRemindersUseCase: ImportRemindersUseCase,
     private val updateReminderUseCase: UpdateReminderUseCase,
     private val addReminderUseCase: AddReminderUseCase,
-    private val autoBackup: com.example.whatsappreminder.util.AutoBackup
+    private val autoBackup: com.example.whatsappreminder.util.AutoBackup,
+    private val clearDataUseCase: com.example.whatsappreminder.domain.usecase.ClearDataUseCase
 ) : ViewModel() {
 
     // تحويل تدفق التذكيرات إلى حالة واجهة قابلة للمراقبة
@@ -57,6 +58,14 @@ class MainViewModel @Inject constructor(
     init {
         // نسخة احتياطية تلقائية عند كل فتح للتطبيق
         viewModelScope.launch { autoBackup.run() }
+    }
+
+    /** مسح شامل وعميق لكل بيانات التطبيق */
+    fun clearAllData() {
+        viewModelScope.launch {
+            clearDataUseCase()
+            _events.emit(MainEvent.Message("تم مسح جميع البيانات بالكامل"))
+        }
     }
 
     /** استعادة التذكيرات من النسخة التلقائية الداخلية */

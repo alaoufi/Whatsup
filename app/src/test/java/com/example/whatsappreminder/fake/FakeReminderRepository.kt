@@ -45,4 +45,8 @@ class FakeReminderRepository : ReminderRepository {
     override suspend fun deleteReminder(reminder: Reminder) {
         state.value = state.value.filterNot { it.id == reminder.id }
     }
+
+    override suspend fun deleteAllReminders() {
+        state.value = emptyList()
+    }
 }

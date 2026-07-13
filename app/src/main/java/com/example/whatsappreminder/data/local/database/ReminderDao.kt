@@ -46,4 +46,8 @@ interface ReminderDao {
     /** حذف تذكير */
     @Delete
     suspend fun delete(reminder: ReminderEntity)
+
+    /** حذف كل التذكيرات (للمسح الشامل) */
+    @Query("DELETE FROM reminders")
+    suspend fun deleteAll()
 }

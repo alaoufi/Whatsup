@@ -49,6 +49,9 @@ class ReminderRepositoryImpl @Inject constructor(
     override suspend fun deleteReminder(reminder: Reminder) =
         dao.delete(reminder.toEntity()).also { refreshWidget() }
 
+    override suspend fun deleteAllReminders() =
+        dao.deleteAll().also { refreshWidget() }
+
     /** تحديث أداة الشاشة الرئيسية بعد أي تغيير في البيانات */
     private fun refreshWidget() {
         runCatching { ReminderWidgetProvider.refresh(context) }

@@ -172,10 +172,19 @@ fun AddReminderScreen(
     var templates by remember { mutableStateOf(TemplateStore.load(context)) }
     var showManageTemplates by remember { mutableStateOf(false) }
 
+    // البحث في جهات الاتصال: خارج الخيط الرئيسي + تأخير (debounce)
+    // لتفادي تجميد لوحة المفاتيح والواجهة عند الكتابة السريعة.
     LaunchedEffect(query, hasContactsPermission) {
-        results = if (hasContactsPermission && query.isNotBlank()) {
-            ContactsSearch.search(context, query)
-        } else emptyList()
+        if (hasContactsPermission && query.isNotBlank()) {
+            kotlinx.coroutines.delay(300)
+            val q = query
+            val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                ContactsSearch.search(context, q)
+            }
+            results = found
+        } else {
+            results = emptyList()
+        }
     }
 
     LaunchedEffect(state.isSaved) {

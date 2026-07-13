@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Restore
@@ -229,6 +230,7 @@ fun MainScreen(
     var showCountryDialog by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     var showStats by remember { mutableStateOf(false) }
+    var showClearConfirm by remember { mutableStateOf(false) }
     // حالات المفاتيح (قفل بالبصمة / إخفاء المعاينة)
     var lockEnabled by remember { mutableStateOf(SettingsPreferences(context).isBiometricLock()) }
     var hidePreview by remember { mutableStateOf(SettingsPreferences(context).isHidePreview()) }
@@ -246,8 +248,12 @@ fun MainScreen(
     ) { uri ->
         val json = pendingExport
         if (uri != null && json != null) {
-            runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+            // كتابة الملف على خيط خلفي لتفادي أي تجميد
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri)
+                        ?.use { it.write(json.toByteArray()) }
+                }
             }
             Toast.makeText(context, "تم حفظ النسخة الاحتياطية", Toast.LENGTH_SHORT).show()
         }
@@ -277,10 +283,14 @@ fun MainScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            val text = runCatching {
-                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-            }.getOrNull()
-            if (text != null) viewModel.importFromJson(text)
+            // قراءة الملف على خيط خلفي ثم الاستيراد
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val text = runCatching {
+                    context.contentResolver.openInputStream(uri)
+                        ?.bufferedReader()?.use { it.readText() }
+                }.getOrNull()
+                if (text != null) viewModel.importFromJson(text)
+            }
         }
     }
 
@@ -326,6 +336,7 @@ fun MainScreen(
                         onCountryCode = { showCountryDialog = true },
                         onAbout = { showAbout = true },
                         onStats = { showStats = true },
+                        onClearData = { showClearConfirm = true },
                         onToggleTheme = {
                             com.example.whatsappreminder.ui.theme.ThemeState.setMode(
                                 context,
@@ -599,6 +610,32 @@ fun MainScreen(
     // حوار الإحصائيات
     if (showStats) {
         StatsDialog(reminders = uiState.reminders, onDismiss = { showStats = false })
+    }
+
+    // تأكيد المسح الشامل
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearConfirm = false
+                    viewModel.clearAllData()
+                }) {
+                    Text("مسح الكل", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) { Text("إلغاء") }
+            },
+            title = { Text("مسح جميع البيانات") },
+            text = {
+                Text(
+                    "سيُحذف كل شيء نهائياً: التذكيرات، الإعدادات، القوالب، " +
+                        "والنسخ الاحتياطية الداخلية، مع إلغاء كل المنبّهات. " +
+                        "لا يمكن التراجع."
+                )
+            }
+        )
     }
 }
 
@@ -927,6 +964,7 @@ private fun OverflowMenu(
     onCountryCode: () -> Unit,
     onAbout: () -> Unit,
     onStats: () -> Unit,
+    onClearData: () -> Unit,
     onToggleTheme: () -> Unit,
     lockEnabled: Boolean,
     onToggleLock: () -> Unit,
@@ -998,6 +1036,17 @@ private fun OverflowMenu(
             text = { Text("حول التطبيق") },
             leadingIcon = { Icon(Icons.Filled.Info, contentDescription = null) },
             onClick = { expanded = false; onAbout() }
+        )
+        DropdownMenuItem(
+            text = { Text("مسح جميع البيانات") },
+            leadingIcon = {
+                Icon(
+                    Icons.Filled.DeleteForever,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            onClick = { expanded = false; onClearData() }
         )
     }
 }
