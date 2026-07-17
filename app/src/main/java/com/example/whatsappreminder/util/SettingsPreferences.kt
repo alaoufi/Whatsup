@@ -30,8 +30,16 @@ class SettingsPreferences(context: Context) {
         private const val KEY_HIDE_PREVIEW = "hide_preview"
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_BIOMETRIC_LOCK = "biometric_lock"
+        private const val KEY_ACTIVATED = "activated"
         // رمز افتراضي (السعودية) — يمكن للمستخدم تغييره
         private const val DEFAULT_COUNTRY_CODE = "966"
+    }
+
+    /** هل فُعّل التطبيق بكود صحيح؟ */
+    fun isActivated(): Boolean = prefs.getBoolean(KEY_ACTIVATED, false)
+
+    fun setActivated(activated: Boolean) {
+        prefs.edit { putBoolean(KEY_ACTIVATED, activated) }
     }
 
     /** رمز الدولة الافتراضي (أرقام فقط، بلا +) يُضاف للأرقام المحلية */

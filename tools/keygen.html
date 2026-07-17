@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مولّد أكواد التفعيل — WhatsAppReminder</title>
+<style>
+  body { font-family: system-ui, sans-serif; background:#0d1117; color:#e6edf3; margin:0; padding:24px; }
+  .card { max-width:460px; margin:40px auto; background:#161b22; border:1px solid #30363d; border-radius:16px; padding:24px; }
+  h1 { font-size:20px; color:#25d366; margin:0 0 4px; }
+  p { color:#8b949e; font-size:14px; }
+  label { display:block; margin:16px 0 6px; font-weight:bold; }
+  input { width:100%; box-sizing:border-box; padding:12px; font-size:16px; border-radius:10px;
+          border:1px solid #30363d; background:#0d1117; color:#e6edf3; }
+  .out { margin-top:16px; padding:14px; background:#0d1117; border:1px solid #30363d; border-radius:10px; }
+  .out b { color:#25d366; }
+  .code { font-size:18px; font-weight:bold; letter-spacing:1px; }
+  .warn { color:#f0883e; font-size:12px; margin-top:16px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>مولّد أكواد التفعيل</h1>
+  <p>أدخل «رمز الجهاز» الذي يظهر في شاشة تفعيل التطبيق لتحصل على كود التفعيل.</p>
+
+  <label>رمز الجهاز (Device code)</label>
+  <input id="device" placeholder="مثال: A1B2-C3D4-E5F6" oninput="gen()" autocomplete="off">
+
+  <div class="out">
+    <div>الكود العالمي: <b id="univ"></b></div>
+    <div style="margin-top:8px">كود التفعيل لهذا الجهاز:<br><span class="code" id="code">—</span></div>
+  </div>
+
+  <div class="warn">⚠️ هذا الملف سرّي — يحتوي مفتاح التوليد. لا تشاركه مع أحد.</div>
+</div>
+
+<script>
+// نفس قيم LicenseManager.kt
+const SECRET = "WAR-2026-#Alaoufi#-KEY";
+const UNIVERSAL_CODE = "UNIV1-WAR2026";
+document.getElementById('univ').textContent = UNIVERSAL_CODE;
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function fmt(hex) {
+  const up = hex.toUpperCase();
+  return `${up.slice(0,4)}-${up.slice(4,8)}-${up.slice(8,12)}`;
+}
+async function gen() {
+  const device = document.getElementById('device').value.trim().toUpperCase();
+  if (!device) { document.getElementById('code').textContent = '—'; return; }
+  const hex = await sha256Hex(SECRET + device);
+  document.getElementById('code').textContent = fmt(hex);
+}
+</script>
+</body>
+</html>

@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Info
@@ -135,6 +136,26 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
         setContent {
             WhatsAppReminderTheme {
+                // بوابة التفعيل: تُطلب مرة واحدة حتى إدخال كود صحيح
+                var activated by remember {
+                    mutableStateOf(SettingsPreferences(this).isActivated())
+                }
+                if (!activated) {
+                    ActivationScreen(
+                        deviceCode = com.example.whatsappreminder.util.LicenseManager.deviceCode(this),
+                        onValidate = { entered ->
+                            val ok = com.example.whatsappreminder.util.LicenseManager
+                                .validate(this, entered)
+                            if (ok) {
+                                SettingsPreferences(this).setActivated(true)
+                                activated = true
+                            }
+                            ok
+                        }
+                    )
+                    return@WhatsAppReminderTheme
+                }
+
                 // بوابة قفل البصمة: تُعرض الواجهة بعد نجاح التحقق (إن كان القفل مفعّلاً)
                 var unlocked by remember {
                     mutableStateOf(!SettingsPreferences(this).isBiometricLock())
@@ -182,6 +203,100 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             )
             .build()
         runCatching { prompt.authenticate(info) }
+    }
+}
+
+/** شاشة التفعيل: تُعرض حتى إدخال كود صحيح (خاص بالجهاز أو الكود العالمي) */
+@Composable
+private fun ActivationScreen(
+    deviceCode: String,
+    onValidate: (String) -> Boolean
+) {
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val context = LocalContext.current
+    var code by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Filled.Lock,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(12.dp))
+            Text("تفعيل التطبيق", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "أرسل رمز جهازك للمطوّر لتحصل على كود التفعيل، أو أدخل الكود العالمي.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(20.dp))
+
+            // رمز الجهاز + نسخ
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "رمز جهازك",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            deviceCode,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    IconButton(onClick = {
+                        clipboard.setText(androidx.compose.ui.text.AnnotatedString(deviceCode))
+                        Toast.makeText(context, "تم نسخ رمز الجهاز", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(Icons.Filled.ContentCopy, contentDescription = "نسخ")
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = code,
+                onValueChange = { code = it; error = false },
+                label = { Text("كود التفعيل") },
+                isError = error,
+                supportingText = if (error) {
+                    { Text("كود غير صحيح لهذا الجهاز") }
+                } else null,
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            Button(
+                onClick = {
+                    if (!onValidate(code)) {
+                        error = true
+                        Toast.makeText(context, "كود غير صحيح", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+            ) {
+                Text("تفعيل", fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 
