@@ -20,12 +20,12 @@ import java.security.SecureRandom
  */
 object LicenseManager {
 
-    // ⚠️ المفتاح العامّ (Base64) لمولّد المالك — آمن للنشر، لا يولّد أكواداً.
-    // مطابق للمفتاح المضمّن في مولّد المالك (guard.js → PUBLIC_KEY).
-    private const val PUB_B64 = "ucd/BzIBLoU2ol9GVwYeEjoTb7SsbfOgPtNwYls0rI0="
+    // ⚠️ المفتاح العامّ الموحّد (Base64) لمولّد المالك — آمن للنشر، لا يولّد أكواداً.
+    // مطابق للمفتاح المضمّن في مولّد المالك (نظام UNI3).
+    private const val PUB_B64 = "W5Kc9hRB7lb9xSh/VqdR4T8GT6VaDznEwYQgXZpLZz0="
 
-    // نفس بادئة المولّد
-    private const val PREFIX = "UNIV1"
+    // نفس بادئة المولّد الموحّد (نظام UNI3)
+    private const val PREFIX = "UNI3"
 
     // «جهاز» ثابت للكود العالمي: كود واحد يعمل على أي جهاز
     // (يُولَّد بـ: node keygen.mjs code --seed <SEED> --device UNIVERSAL --days 0)
