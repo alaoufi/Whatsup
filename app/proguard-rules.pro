@@ -14,3 +14,9 @@
 }
 
 # Hilt و Room و WorkManager تُوفّر قواعد consumer خاصة بها تلقائياً.
+
+# مكتبة توقيع Ed25519 (net.i2p.crypto:eddsa) لنظام التفعيل
+-keep class net.i2p.crypto.eddsa.** { *; }
+# تشير المكتبة إلى صنف JDK غير موجود في أندرويد؛ نتجاهله بأمان
+-dontwarn sun.security.x509.**
+-dontwarn net.i2p.crypto.eddsa.**

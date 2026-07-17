@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.width
@@ -75,6 +76,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -136,20 +138,26 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
         setContent {
             WhatsAppReminderTheme {
-                // بوابة التفعيل: تُطلب مرة واحدة حتى إدخال كود صحيح
+                // بوابة التفعيل: تُطلب حتى إدخال كود صحيح (مربوط بالجهاز، Ed25519)
                 var activated by remember {
-                    mutableStateOf(SettingsPreferences(this).isActivated())
+                    mutableStateOf(
+                        com.example.whatsappreminder.util.LicenseManager.isActive(this)
+                    )
                 }
                 if (!activated) {
                     ActivationScreen(
-                        deviceCode = com.example.whatsappreminder.util.LicenseManager.deviceCode(this),
+                        deviceCode = com.example.whatsappreminder.util.LicenseManager
+                            .deviceIdPretty(this),
                         onValidate = { entered ->
                             val ok = com.example.whatsappreminder.util.LicenseManager
-                                .validate(this, entered)
-                            if (ok) {
-                                SettingsPreferences(this).setActivated(true)
-                                activated = true
-                            }
+                                .activate(this, entered)
+                            if (ok) activated = true
+                            ok
+                        },
+                        onRecoverSeed = { seedHex ->
+                            val ok = com.example.whatsappreminder.util.LicenseManager
+                                .recoverWithSeed(this, seedHex)
+                            if (ok) activated = true
                             ok
                         }
                     )
@@ -206,16 +214,21 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
 }
 
-/** شاشة التفعيل: تُعرض حتى إدخال كود صحيح (خاص بالجهاز أو الكود العالمي) */
+/** شاشة التفعيل: تُعرض حتى إدخال كود صحيح خاص بالجهاز (Ed25519) */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ActivationScreen(
     deviceCode: String,
-    onValidate: (String) -> Boolean
+    onValidate: (String) -> Boolean,
+    onRecoverSeed: (String) -> Boolean = { false }
 ) {
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val context = LocalContext.current
     var code by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
+    // استرجاع المالك: يظهر بالضغط المطوّل على الأيقونة
+    var showRecover by remember { mutableStateOf(false) }
+    var seed by remember { mutableStateOf("") }
 
     Box(
         modifier = Modifier
@@ -227,14 +240,19 @@ private fun ActivationScreen(
             Icon(
                 imageVector = Icons.Filled.Lock,
                 contentDescription = null,
-                modifier = Modifier.size(64.dp),
+                modifier = Modifier
+                    .size(64.dp)
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = { showRecover = true }
+                    ),
                 tint = MaterialTheme.colorScheme.primary
             )
             Spacer(Modifier.height(12.dp))
             Text("تفعيل التطبيق", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             Text(
-                "أرسل رمز جهازك للمطوّر لتحصل على كود التفعيل، أو أدخل الكود العالمي.",
+                "أرسل رمز جهازك للمطوّر لتحصل على كود التفعيل الخاص بهذا الجهاز.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -295,6 +313,31 @@ private fun ActivationScreen(
                     .height(50.dp)
             ) {
                 Text("تفعيل", fontWeight = FontWeight.Bold)
+            }
+
+            // استرجاع المالك بالبذرة السرّية (يظهر بالضغط المطوّل على القفل)
+            if (showRecover) {
+                Spacer(Modifier.height(20.dp))
+                OutlinedTextField(
+                    value = seed,
+                    onValueChange = { seed = it },
+                    label = { Text("بذرة المالك (64 hex)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        if (onRecoverSeed(seed)) {
+                            Toast.makeText(context, "تم التفعيل الدائم", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "بذرة غير صحيحة", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("استرجاع المالك")
+                }
             }
         }
     }
