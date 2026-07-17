@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- الصلاحيات المطلوبة -->
+    <!-- إرسال الإشعارات (مطلوبة على Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- إعادة الجدولة بعد إعادة تشغيل الجهاز -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- جدولة المنبهات الدقيقة -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- الوصول للإنترنت والتحقق من حالة الشبكة -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- قراءة جهات الاتصال للبحث عن الأرقام واختيارها -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- لفتح واتساب تلقائياً في الموعد من الخلفية (العرض فوق التطبيقات الأخرى) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- لإطلاق إشعار ملء الشاشة الذي يفتح واتساب عند القفل -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- لطلب استثناء التطبيق من تحسينات البطارية (لضمان دقة المواعيد) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- للتحقق من تثبيت واتساب عند الحاجة (اختياري) -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="whatsapp" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".WhatsAppReminderApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.WhatsAppReminder"
+        tools:targetApi="34">
+
+        <!-- الشاشة الرئيسية (نقطة الإطلاق) -->
+        <activity
+            android:name=".ui.main.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.WhatsAppReminder.Starting">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- شاشة إضافة تذكير -->
+        <activity
+            android:name=".ui.add.AddReminderActivity"
+            android:exported="true"
+            android:parentActivityName=".ui.main.MainActivity"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.WhatsAppReminder">
+            <!-- إنشاء تذكير من مشاركة نص/رقم من أي تطبيق -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- شاشة تفاصيل التذكير (تُفتح من القائمة ومن إشعار "فات الموعد") -->
+        <activity
+            android:name=".ui.detail.ReminderDetailActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.main.MainActivity"
+            android:theme="@style/Theme.WhatsAppReminder" />
+
+        <!-- شاشة وسيطة شفافة تفتح واتساب مباشرة عند الضغط على إشعار التذكير -->
+        <activity
+            android:name=".ui.open.OpenWhatsAppActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- شاشة الإرسال الجماعي: إرسال نفس الرسالة لعدة مستلمين تباعاً -->
+        <activity
+            android:name=".ui.batch.BatchSendActivity"
+            android:exported="false"
+            android:theme="@style/Theme.WhatsAppReminder" />
+
+        <!-- مستقبِل إعادة التشغيل لإعادة جدولة التذكيرات -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- مستقبِل المنبّه الدقيق الذي يُطلق إشعار التذكير في وقته -->
+        <receiver
+            android:name=".receiver.ReminderAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- مستقبِل أزرار الإشعار (تأجيل/تم) -->
+        <receiver
+            android:name=".receiver.ReminderActionReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- أداة الشاشة الرئيسية -->
+        <receiver
+            android:name=".widget.ReminderWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+
+        <!-- تعطيل التهيئة الافتراضية لـ WorkManager لأننا نستخدم Hilt (Configuration.Provider) -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+    </application>
+
+</manifest>
