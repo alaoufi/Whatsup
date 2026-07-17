@@ -252,7 +252,7 @@ private fun ActivationScreen(
             Text("تفعيل التطبيق", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             Text(
-                "أرسل رمز جهازك للمطوّر لتحصل على كود التفعيل الخاص بهذا الجهاز.",
+                "أدخل كود التفعيل. يمكنك استخدام الكود العالمي، أو أرسل رمز جهازك للمطوّر لكود خاصّ بهذا الجهاز.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

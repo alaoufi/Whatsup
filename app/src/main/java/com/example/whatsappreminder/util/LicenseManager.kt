@@ -26,6 +26,10 @@ object LicenseManager {
     // نفس بادئة المولّد
     private const val PREFIX = "UNIV1"
 
+    // «جهاز» ثابت للكود العالمي: كود واحد يعمل على أي جهاز
+    // (يُولَّد بـ: node keygen.mjs code --seed <SEED> --device UNIVERSAL --days 0)
+    private const val UNIV_DEVICE = "UNIVERSAL"
+
     private const val B32 = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     private const val PREFS = "app_guard"
     private const val K_DEV = "guard_device"
@@ -129,9 +133,16 @@ object LicenseManager {
         return eff < at + dur.toLong() * 86_400_000L
     }
 
-    /** محاولة تفعيل بكود؛ يعيد true عند النجاح ويخزّن السجل */
+    /**
+     * محاولة تفعيل بكود؛ يعيد true عند النجاح ويخزّن السجل.
+     * يقبل نوعين من الأكواد:
+     *  1) كود خاصّ بهذا الجهاز (مربوط برقم الجهاز).
+     *  2) كود عالمي يعمل على أي جهاز (device = UNIVERSAL).
+     */
     fun activate(context: Context, code: String): Boolean {
-        val dur = verifyCode(code, deviceId(context)) ?: return false
+        val dur = verifyCode(code, deviceId(context))
+            ?: verifyCode(code, UNIV_DEVICE)
+            ?: return false
         val now = System.currentTimeMillis()
         prefs(context).edit()
             .putInt(K_LIC_DUR, dur)

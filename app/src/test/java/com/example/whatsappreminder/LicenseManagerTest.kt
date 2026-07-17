@@ -22,6 +22,10 @@ class LicenseManagerTest {
     private val thirtyDayCode =
         "AARPL7B3QK8KHD59EQ54PSY52Q9XT2ENBL4DU69YUTNU47U4YMN6AWH92Y8EKX9RKW5ED74473EE8NTBH88X9TKJKWEWNJFZNMDKAZRXAW"
 
+    // node keygen.mjs code --seed <SEED> --device UNIVERSAL --days 0  (كود عالمي: أي جهاز)
+    private val universalCode =
+        "AAAFSFE5CK6HF3ZEPW5THYMPJP5LJDPD3AVDSNXSSSSQZEM9EAY96FMD9VBDBMYWGPKPBLFHG4WU6JR2W7EV5C352U5TBKXHTUZFMNTWAJ"
+
     @Test
     fun `permanent code verifies with duration zero`() {
         assertEquals(0, LicenseManager.verifyCode(permanentCode, device))
@@ -46,5 +50,13 @@ class LicenseManagerTest {
     @Test
     fun `garbage code rejected`() {
         assertNull(LicenseManager.verifyCode("NOT-A-REAL-CODE", device))
+    }
+
+    @Test
+    fun `universal code verifies against UNIVERSAL device on any phone`() {
+        // الكود العالمي مُوقّع على الجهاز الثابت "UNIVERSAL" فيعمل على أي جهاز
+        assertEquals(0, LicenseManager.verifyCode(universalCode, "UNIVERSAL"))
+        // ولا يُقبل كأنه كود خاصّ بجهاز حقيقي
+        assertNull(LicenseManager.verifyCode(universalCode, device))
     }
 }
