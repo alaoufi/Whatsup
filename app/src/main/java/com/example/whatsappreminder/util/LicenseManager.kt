@@ -20,8 +20,9 @@ import java.security.SecureRandom
  */
 object LicenseManager {
 
-    // ⚠️ المفتاح العامّ (Base64) — من: node keygen.mjs new. آمن للنشر.
-    private const val PUB_B64 = "CHS1vCGSq2GitGzMNt7d8+VkOWYVQghVOwQDfEMr5Bw="
+    // ⚠️ المفتاح العامّ (Base64) لمولّد المالك — آمن للنشر، لا يولّد أكواداً.
+    // مطابق للمفتاح المضمّن في مولّد المالك (guard.js → PUBLIC_KEY).
+    private const val PUB_B64 = "ucd/BzIBLoU2ol9GVwYeEjoTb7SsbfOgPtNwYls0rI0="
 
     // نفس بادئة المولّد
     private const val PREFIX = "UNIV1"
@@ -82,18 +83,28 @@ object LicenseManager {
     }
 
     /**
-     * التحقّق النقي من كود لجهاز معيّن (بلا سياق).
+     * التحقّق النقي من كود لجهاز معيّن (بلا سياق) بالمفتاح العامّ المضمّن.
      * @return عدد الأيام (0=دائم) إن كان صالحاً، أو null.
      */
-    fun verifyCode(code: String, deviceId: String): Int? {
+    fun verifyCode(code: String, deviceId: String): Int? =
+        verifyCodeWithPub(code, deviceId, PUB_B64)
+
+    /**
+     * نفس منطق [verifyCode] لكن بمفتاح عامّ مُمرَّر — للاختبار (إثبات تطابق
+     * الخوارزمية مع المولّد دون الحاجة للبذرة السرّية).
+     */
+    internal fun verifyCodeWithPub(code: String, deviceId: String, pubB64: String): Int? {
         val pkt = b32Decode(norm(code))
         if (pkt.size != 66) return null
         val dur = ((pkt[0].toInt() and 0xFF) shl 8) or (pkt[1].toInt() and 0xFF)
         val sig = pkt.copyOfRange(2, 66)
         val msg = "$PREFIX|${norm(deviceId)}|$dur".toByteArray(Charsets.UTF_8)
-        val pub = java.util.Base64.getDecoder().decode(PUB_B64)
+        val pub = java.util.Base64.getDecoder().decode(pubB64)
         return if (ed25519Verify(msg, sig, pub)) dur else null
     }
+
+    /** المفتاح العامّ المضمّن (للاختبار/العرض) */
+    internal fun publicKeyB64(): String = PUB_B64
 
     // ---------- رقم الجهاز ----------
 
