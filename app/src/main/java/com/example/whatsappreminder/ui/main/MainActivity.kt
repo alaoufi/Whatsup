@@ -116,6 +116,7 @@ import com.example.whatsappreminder.domain.model.ReminderStatus
 import com.example.whatsappreminder.ui.add.AddReminderActivity
 import com.example.whatsappreminder.ui.detail.ReminderDetailActivity
 import com.example.whatsappreminder.ui.theme.WhatsAppReminderTheme
+import com.example.whatsappreminder.ui.update.ForceUpdateGate
 import com.example.whatsappreminder.ui.toVisual
 import com.example.whatsappreminder.util.DateFormatter
 import com.example.whatsappreminder.util.NotificationHelper
@@ -138,52 +139,55 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
         setContent {
             WhatsAppReminderTheme {
-                // بوابة التفعيل: تُطلب حتى إدخال كود صحيح (مربوط بالجهاز، Ed25519)
-                var activated by remember {
-                    mutableStateOf(
-                        com.example.whatsappreminder.util.LicenseManager.isActive(this)
-                    )
-                }
-                if (!activated) {
-                    ActivationScreen(
-                        deviceCode = com.example.whatsappreminder.util.LicenseManager
-                            .deviceIdPretty(this),
-                        onValidate = { entered ->
-                            val ok = com.example.whatsappreminder.util.LicenseManager
-                                .activate(this, entered)
-                            if (ok) activated = true
-                            ok
-                        },
-                        onRecoverSeed = { seedHex ->
-                            val ok = com.example.whatsappreminder.util.LicenseManager
-                                .recoverWithSeed(this, seedHex)
-                            if (ok) activated = true
-                            ok
-                        }
-                    )
-                    return@WhatsAppReminderTheme
-                }
-
-                // بوابة قفل البصمة: تُعرض الواجهة بعد نجاح التحقق (إن كان القفل مفعّلاً)
-                var unlocked by remember {
-                    mutableStateOf(!SettingsPreferences(this).isBiometricLock())
-                }
-                if (!unlocked) {
-                    LockScreen(onRequestUnlock = { authenticate { unlocked = true } })
-                    // محاولة تلقائية عند الدخول
-                    LaunchedEffect(Unit) { authenticate { unlocked = true } }
-                } else {
-                    MainScreen(
-                        onAddClick = {
-                            startActivity(Intent(this, AddReminderActivity::class.java))
-                        },
-                        onItemClick = { reminder ->
-                            val intent = Intent(this, ReminderDetailActivity::class.java).apply {
-                                putExtra(NotificationHelper.EXTRA_REMINDER_ID, reminder.id)
+                // بوّابة التحديث الإلزاميّة: الأعلى — تحجب حتى التحديث إن توفّرت نسخة أحدث
+                ForceUpdateGate {
+                    // بوابة التفعيل: تُطلب حتى إدخال كود صحيح (مربوط بالجهاز، Ed25519)
+                    var activated by remember {
+                        mutableStateOf(
+                            com.example.whatsappreminder.util.LicenseManager.isActive(this)
+                        )
+                    }
+                    if (!activated) {
+                        ActivationScreen(
+                            deviceCode = com.example.whatsappreminder.util.LicenseManager
+                                .deviceIdPretty(this),
+                            onValidate = { entered ->
+                                val ok = com.example.whatsappreminder.util.LicenseManager
+                                    .activate(this, entered)
+                                if (ok) activated = true
+                                ok
+                            },
+                            onRecoverSeed = { seedHex ->
+                                val ok = com.example.whatsappreminder.util.LicenseManager
+                                    .recoverWithSeed(this, seedHex)
+                                if (ok) activated = true
+                                ok
                             }
-                            startActivity(intent)
-                        }
-                    )
+                        )
+                        return@ForceUpdateGate
+                    }
+
+                    // بوابة قفل البصمة: تُعرض الواجهة بعد نجاح التحقق (إن كان القفل مفعّلاً)
+                    var unlocked by remember {
+                        mutableStateOf(!SettingsPreferences(this).isBiometricLock())
+                    }
+                    if (!unlocked) {
+                        LockScreen(onRequestUnlock = { authenticate { unlocked = true } })
+                        // محاولة تلقائية عند الدخول
+                        LaunchedEffect(Unit) { authenticate { unlocked = true } }
+                    } else {
+                        MainScreen(
+                            onAddClick = {
+                                startActivity(Intent(this, AddReminderActivity::class.java))
+                            },
+                            onItemClick = { reminder ->
+                                val intent = Intent(this, ReminderDetailActivity::class.java).apply {
+                                    putExtra(NotificationHelper.EXTRA_REMINDER_ID, reminder.id)
+                                }
+                                startActivity(intent)
+                            }
+                        )
+                    }
                 }
             }
         }

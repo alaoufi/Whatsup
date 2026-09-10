@@ -6,6 +6,12 @@ plugins {
     id("com.google.dagger.hilt.android")
 }
 
+// رقم البناء يأتي من GitHub Actions (github.run_number)؛ محلياً = 1
+val appBuildNumber = (System.getenv("APP_BUILD_NUMBER") ?: "1").toInt()
+
+// مفتاح التوقيع الثابت (ضروري لآليّة التحديث الذاتيّ: يُثبَّت التحديث فوق القديم)
+val releaseKeystore = rootProject.file("keystore/release.jks")
+
 android {
     namespace = "com.example.whatsappreminder"
     compileSdk = 34
@@ -14,12 +20,26 @@ android {
         applicationId = "com.example.whatsappreminder"
         minSdk = 29          // الحد الأدنى: Android 10
         targetSdk = 34       // الهدف: Android 14
-        versionCode = 1
-        versionName = "1.0"
+        // versionCode = رقم البناء، versionName = 1.0.<رقم البناء> — يُضبطان تلقائياً في CI
+        versionCode = appBuildNumber
+        versionName = "1.0.$appBuildNumber"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    signingConfigs {
+        // مفتاح إصدار ثابت مُضمَّن — نفس التوقيع في كل بناء (محلي أو CI)
+        // فتُثبَّت التحديثات فوق النسخة القديمة دون فقدان بيانات المستخدم.
+        create("release") {
+            if (releaseKeystore.exists()) {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "whatsapp2026"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "whatsappreminder"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "whatsapp2026"
+            }
         }
     }
 
@@ -32,9 +52,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // توقيع نسخة release بمفتاح debug لتسهيل التثبيت المباشر (Sideload)
-            // ملاحظة: للنشر على Google Play استبدله بمفتاح إصدار خاص بك.
-            signingConfig = signingConfigs.getByName("debug")
+            // استخدم مفتاح الإصدار الثابت إن وُجد، وإلا مفتاح debug (للبناء المحلي بلا keystore)
+            signingConfig = if (releaseKeystore.exists())
+                signingConfigs.getByName("release")
+            else
+                signingConfigs.getByName("debug")
         }
     }
 
@@ -50,6 +72,8 @@ android {
 
     buildFeatures {
         compose = true
+        // مطلوب لقراءة رقم النسخة الحالي (VERSION_CODE/NAME) في نظام التحديث
+        buildConfig = true
     }
 
     composeOptions {

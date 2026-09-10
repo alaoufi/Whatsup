@@ -23,6 +23,8 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- لطلب استثناء التطبيق من تحسينات البطارية (لضمان دقة المواعيد) -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- لتثبيت تحديث APK القادم من GitHub Releases (نظام التحديث الذاتي) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- للتحقق من تثبيت واتساب عند الحاجة (اختياري) -->
     <queries>
@@ -129,6 +131,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_info" />
         </receiver>
+
+        <!-- مزوّد الملفات لمشاركة ملف APK المُحمَّل مع مثبّت النظام (نظام التحديث) -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- تعطيل التهيئة الافتراضية لـ WorkManager لأننا نستخدم Hilt (Configuration.Provider) -->
         <provider
